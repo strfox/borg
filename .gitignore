@@ -1,0 +1,12 @@
+# VSCode
+/.vscode
+
+# Rust
+/target
+
+# IDEA
+/.idea
+
+# Seeborg
+/config.yml
+/dictionary.json
