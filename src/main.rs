@@ -1,11 +1,15 @@
+#[macro_use]
+extern crate lazy_static;
+extern crate regex;
 extern crate serde;
 extern crate serde_json;
 extern crate serde_yaml;
-extern crate regex;
-extern crate lazy_static;
 
+#[macro_use]
+mod util;
 mod config;
 mod dictionary;
+
 
 const CONFIG_PATH: &str = "config.yml";
 
@@ -42,7 +46,7 @@ fn main() {
 
     use dictionary::{Dictionary, DictionaryError};
 
-    let mut dict = match Dictionary::load(Path::new(&config.dictionary_path)) {
+    let dict = match Dictionary::load(Path::new(&config.dictionary_path)) {
         Ok(d) => d,
         Err(e) => match e {
             DictionaryError::IOError(io_err) => {
@@ -51,19 +55,15 @@ fn main() {
                 at such location and make sure that this program has read and write \
                 permissions. Details: {:?}", config.dictionary_path, io_err.to_string());
                 return;
-            },
+            }
             DictionaryError::JSONError(json_err) => {
                 println!("A JSON parsing error occurred. This is most likely due to \
                 a corrupted dictionary file. Please check the dictionary file for any \
                 anomalies. Details on the JSON parsing error: {:?}", json_err.to_string());
                 return;
-            },
+            }
         }
     };
 
     println!("Dictionary loaded.");
-
-    dict.sort_sentences()
-
-    
 }
