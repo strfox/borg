@@ -141,15 +141,31 @@ impl Dictionary {
         learned_something
     }
 
-    pub fn respond_to<R: RngCore>(&self, line: &str, rng: &mut R) -> Option<&str> {
-        /*let known_words = self.known_words(line);
+    pub fn respond_to(&self, line: &str, rng: &mut dyn RngCore) -> Option<String> {
+        let known_words = self.known_words(line);
         if known_words.is_empty() {
             None
         } else {
             let pivot = &known_words[rng.next_u64() as usize % known_words.len()];
-            todo!()
-        }*/
-        todo!()
+            let sentences_with_word = self.sentences_with_word(pivot);
+            if sentences_with_word.len() < 2 {
+                None
+            } else {
+                let s1 = *pick_random(&sentences_with_word, rng);
+                let s2 = *pick_random(&sentences_with_word, rng);
+                let left = get_words_left_of_pivot(s1, pivot)
+                    .unwrap_or_else(|| vec![""])
+                    .join(" ");
+                let right = get_words_right_of_pivot_inclusive(s2, pivot)
+                    .unwrap()
+                    .join(" ");
+                if left == "" {
+                    Some(right)
+                } else {
+                    Some(format!("{} {}", left, right))
+                }
+            }
+        }
     }
 
     fn known_words(&self, line: &str) -> Vec<String> {
@@ -191,6 +207,37 @@ fn insert_word_into_indices(indices: &mut Indices, word: &str, sentence_index: u
     if !entry.contains(&sentence_index) {
         entry.push(sentence_index);
     }
+}
+
+fn pick_random<'a, T>(v: &'a Vec<T>, rng: &mut dyn RngCore) -> &'a T {
+    &v[rng.next_u64() as usize % v.len()]
+}
+
+// TODO: maybe delete this
+fn word_position<'a>(line: &'a str, word: &'a str) -> Option<usize> {
+    let words = split_words(line);
+    let index = words.iter().take_while(|x| *x != &word).count();
+    if index == words.len() {
+        None
+    } else {
+        Some(index)
+    }
+}
+
+fn get_words_left_of_pivot<'a>(line: &'a str, pivot: &'a str) -> Option<Vec<&'a str>> {
+    let words = split_words(line);
+    words
+        .iter()
+        .position(|word| word == &pivot)
+        .and_then(|pivot_position| Some(words[0..pivot_position].to_vec()))
+}
+
+fn get_words_right_of_pivot_inclusive<'a>(line: &'a str, pivot: &'a str) -> Option<Vec<&'a str>> {
+    let words = split_words(line);
+    words
+        .iter()
+        .position(|word| word == &pivot)
+        .and_then(|pivot_position| Some(words[pivot_position..words.len()].to_vec()))
 }
 
 #[cfg(test)]
@@ -462,8 +509,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
-    fn test_respond() {/*
+    fn test_respond() {
         let dict = Dictionary {
             sentences: vec![
                 "hey there everyone".to_string(),
@@ -473,37 +519,48 @@ mod tests {
                 "crabs".to_string(),
             ],
             indices: hashmap![
-                "are".to_string() => vec![1, 4],
-                "there".to_string() => vec![3, 4],
-                "great".to_string() => vec![1],
-                "everyone".to_string() => vec![2, 3],
-                "crab".to_string() => vec![2],
-                "a".to_string() => vec![2],
-                "is".to_string() => vec![2],
-                "crabs".to_string() => vec![0, 1, 4],
-                "hey".to_string() => vec![3],
-                "many".to_string() => vec![4]
+                "hey".to_string() => vec![0],
+                "there".to_string() => vec![0, 3],
+                "everyone".to_string() => vec![0, 1],
+                "is".to_string() => vec![1],
+                "a".to_string() => vec![1],
+                "crab".to_string() => vec![1],
+                "crabs".to_string() => vec![2, 3, 4],
+                "are".to_string() => vec![2, 3],
+                "great".to_string() => vec![3],
+                "many".to_string() => vec![3]
             ],
         };
         use rand::rngs::mock::StepRng;
-        let rng = StepRng::new(0, 2);*/
-        todo!()
+        assert_eq!(
+            Some("everyone".to_string()),
+            dict.respond_to("Hey there everyone!", &mut StepRng::new(2, 1))
+        );
+        assert_eq!(
+            Some("hey there everyone".to_string()),
+            dict.respond_to("Hey there everyone!", &mut StepRng::new(8, 10))
+        );
+        assert_eq!(
+            None,
+            dict.respond_to("hey there crab people", &mut StepRng::new(2, 7))
+        );
+        assert_eq!(
+            Some("crabs".to_string()),
+            dict.respond_to("hey there crabs people", &mut StepRng::new(2, 7))
+        );
     }
 
     #[test]
     fn test_known_words() {
-        let dict = Dictionary{
-            sentences: vec![
-                "hello world!".to_string(),
-                "i love pizza.".to_string()
-            ],
+        let dict = Dictionary {
+            sentences: vec!["hello world!".to_string(), "i love pizza.".to_string()],
             indices: hashmap![
                 "hello".to_string() => vec![0],
                 "world".to_string() => vec![0],
                 "i".to_string() => vec![1],
                 "love".to_string() => vec![1],
                 "pizza".to_string() => vec![1]
-            ]
+            ],
         };
 
         let empty: Vec<&str> = vec![];
@@ -517,7 +574,7 @@ mod tests {
 
     #[test]
     fn test_sentences_with_word() {
-        let dict = Dictionary{
+        let dict = Dictionary {
             sentences: vec![
                 "hello world!".to_string(),
                 "i love pizza.".to_string(),
@@ -532,15 +589,69 @@ mod tests {
                 "is".to_string() => vec![2],
                 "like".to_string() => vec![2],
                 "cool".to_string() => vec![2]
-            ]
+            ],
         };
 
         let empty: Vec<&str> = vec![];
 
-        assert_eq!(vec!["i love pizza.", "pizza is like, cool"], dict.sentences_with_word("pizza"));
+        assert_eq!(
+            vec!["i love pizza.", "pizza is like, cool"],
+            dict.sentences_with_word("pizza")
+        );
         assert_eq!(vec!["i love pizza."], dict.sentences_with_word("love"));
         assert_eq!(empty, dict.sentences_with_word("nonexisting"));
         assert_eq!(empty, dict.sentences_with_word("luve"));
         assert_eq!(empty, dict.sentences_with_word(""));
+    }
+
+    #[test]
+    fn test_word_position() {
+        assert_eq!(Some(0), word_position("i like cake", "i"));
+        assert_eq!(Some(1), word_position("i like cake", "like"));
+        assert_eq!(Some(2), word_position("i like cake", "cake"));
+        assert_eq!(None, word_position("i like cake", "john"));
+        assert_eq!(Some(2), word_position("i like cake i like cake", "cake"));
+    }
+
+    #[test]
+    fn test_get_words_left_of_pivot() {
+        assert_eq!(
+            Some(vec!["this", "is", "a"]),
+            get_words_left_of_pivot("this is a test yeah this is a test", "test")
+        );
+        assert_eq!(
+            Some(Vec::<&str>::new()),
+            get_words_left_of_pivot("this", "this")
+        );
+        assert_eq!(
+            Some(Vec::<&str>::new()),
+            get_words_left_of_pivot("this this", "this")
+        );
+        assert_eq!(None, get_words_left_of_pivot("i am a little teapot", "fox"));
+        assert_eq!(
+            None,
+            get_words_left_of_pivot("abc def ghi jkl", "abc def" /* not a word */)
+        );
+    }
+
+    #[test]
+    fn test_get_words_right_of_pivot_inclusive() {
+        assert_eq!(
+            Some(vec!["test", "yeah", "this", "is", "a", "test"]),
+            get_words_right_of_pivot_inclusive("this is a test yeah this is a test", "test")
+        );
+        assert_eq!(
+            Some(vec!["this"]),
+            get_words_right_of_pivot_inclusive("this", "this")
+        );
+        assert_eq!(
+            Some(vec!["this", "this"]),
+            get_words_right_of_pivot_inclusive("this this", "this")
+        );
+        assert_eq!(None, get_words_left_of_pivot("i am a little teapot", "fox"));
+        assert_eq!(
+            None,
+            get_words_right_of_pivot_inclusive("abc def ghi jkl", "abc def" /* not a word */)
+        );
     }
 }
