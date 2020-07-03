@@ -47,9 +47,9 @@ impl From<serde_yaml::Error> for ConfigError {
 pub struct Behavior {
     pub speaking: bool,
     pub learning: bool,
-    pub reply_rate: bool,
-    pub reply_nick: bool,
-    pub reply_magic: bool,
+    pub reply_rate: f32,
+    pub reply_nick: f32,
+    pub reply_magic: f32,
     pub magic_patterns: Vec<String>,
     pub blacklisted_patterns: Vec<String>,
     pub ignored_users: Vec<String>,
@@ -64,14 +64,15 @@ pub struct ChatBehavior {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Platform {
     pub token: String,
-    pub behavior: Behavior,
-    pub chat_behaviors: Vec<Behavior>,
+    pub behavior: Option<Behavior>,
+    pub chat_behaviors: Option<Vec<Behavior>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
     pub dictionary_path: String,
     pub auto_save_period: i64,
+    pub behavior: Behavior,
     pub telegram: Option<Platform>,
     pub discord: Option<Platform>,
 }
