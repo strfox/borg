@@ -1,6 +1,6 @@
 #[macro_use]
 extern crate lazy_static;
-extern crate regex;
+extern crate onig;
 extern crate serde;
 extern crate serde_json;
 extern crate serde_yaml;
@@ -46,7 +46,7 @@ fn main() {
 
     use dictionary::{Dictionary, DictionaryError};
 
-    let dict = match Dictionary::load(Path::new(&config.dictionary_path)) {
+    let mut dict = match Dictionary::load(Path::new(&config.dictionary_path)) {
         Ok(d) => d,
         Err(e) => match e {
             DictionaryError::IOError(io_err) => {
@@ -66,4 +66,15 @@ fn main() {
     };
 
     println!("Dictionary loaded.");
+
+    if dict.needs_to_build_indices() {
+        println!("Building indices.");
+        dict.rebuild_indices();
+        println!("Indices built.");
+    }
+
+    match dict.write_to_disk(Path::new(&config.dictionary_path)) {
+        Ok(_) => (),
+        Err(_) => println!("Couldn't save dictionary."),
+    };
 }
