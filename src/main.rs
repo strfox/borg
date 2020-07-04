@@ -18,14 +18,15 @@ mod telegram;
 
 use config::{Config, ConfigError};
 use dictionary::{Dictionary, DictionaryError};
-use futures::future::MapErr;
-use futures::{try_join, Future, TryFutureExt};
+use futures::lock::Mutex;
+use futures::Future;
 use seeborg::SeeBorg;
 use std::error;
-use std::error::Error;
 use std::fmt;
 use std::path::Path;
+use std::sync::Arc;
 use telegram::Telegram;
+use std::pin::Pin;
 
 const CONFIG_PATH: &str = "config.yml";
 
@@ -123,18 +124,23 @@ async fn main() {
         println!("Indices built.");
     }
 
-    let mut bot = SeeBorg::new(config, dict);
+    let bot = Arc::new(Mutex::new(SeeBorg::new(config, dict)));
+    let mut tasks: Vec<Pin<Box<dyn Future<Output = Result<(), PlatformError>>>>> = vec![];
 
-    let mut tasks: Vec<Box<dyn Future<Output = Result<(), PlatformError>>>> = vec![];
-
-    let mut telegram = if let Some(_) = bot.config.telegram {
-        Some(Telegram::new(&mut bot))
+    let telegram = if bot.lock().await.config.telegram.is_some() {
+        Some(Arc::new(Mutex::new(Telegram::new(bot).await)))
     } else {
         None
     };
-    if let Some(mut t) = telegram {
-        tasks.push(Box::new(t.poll()));
+
+    if let Some(shared_t) = telegram {
+        tasks.push(Box::pin(async move {
+            let mut telegram = shared_t.lock().await;
+            telegram.poll().await
+        }));
     }
+
+    futures::future::join_all(tasks).await;
 }
 
 fn save_dictionary(config: Config, dict: Dictionary) -> Result<(), DictionaryError> {
