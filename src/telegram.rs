@@ -1,4 +1,5 @@
 use crate::seeborg::SeeBorg;
+use crate::PlatformError;
 use futures::StreamExt;
 use telegram_bot::requests::send_message::CanReplySendMessage;
 use telegram_bot::{Api, MessageKind, UpdateKind};
@@ -22,8 +23,8 @@ impl Telegram<'_> {
             api: Api::new(token),
         }
     }
-
-    pub async fn poll(&mut self) -> Result<(), telegram_bot::Error> {
+    
+    pub async fn poll(&mut self) -> Result<(), PlatformError> {
         let mut stream = self.api.stream();
         while let Some(update) = stream.next().await {
             let update = update?;
@@ -40,4 +41,6 @@ impl Telegram<'_> {
         }
         Ok(())
     }
+
+
 }

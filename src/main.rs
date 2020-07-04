@@ -1,28 +1,60 @@
 #[macro_use]
 extern crate lazy_static;
+extern crate futures;
 extern crate onig;
+extern crate rand_core;
 extern crate serde;
 extern crate serde_json;
 extern crate serde_yaml;
-extern crate futures;
 extern crate tokio;
-extern crate rand_core;
 
 #[macro_use]
 mod util;
 mod config;
 mod dictionary;
+mod discord;
 mod seeborg;
 mod telegram;
-mod discord;
 
 use config::{Config, ConfigError};
 use dictionary::{Dictionary, DictionaryError};
-use std::path::Path;
+use futures::future::MapErr;
+use futures::{try_join, Future, TryFutureExt};
 use seeborg::SeeBorg;
+use std::error;
+use std::error::Error;
+use std::fmt;
+use std::path::Path;
 use telegram::Telegram;
 
 const CONFIG_PATH: &str = "config.yml";
+
+#[derive(Debug)]
+pub enum PlatformError {
+    TelegramError(telegram_bot::Error),
+}
+
+impl fmt::Display for PlatformError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            PlatformError::TelegramError(ref e) => e.fmt(f),
+        }
+    }
+}
+
+impl error::Error for PlatformError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        match *self {
+            PlatformError::TelegramError(ref e) => Some(e),
+        }
+    }
+}
+
+impl From<telegram_bot::Error> for PlatformError {
+    fn from(err: telegram_bot::Error) -> PlatformError {
+        PlatformError::TelegramError(err)
+    }
+}
 
 #[tokio::main]
 async fn main() {
@@ -91,17 +123,18 @@ async fn main() {
         println!("Indices built.");
     }
 
-    let mut seeborg = SeeBorg::new(config, dict);
+    let mut bot = SeeBorg::new(config, dict);
 
-    if seeborg.config.telegram.is_some() {
-        println!("Enabling Telegram.");
-        let mut telegram = Telegram::new(&mut seeborg);
-        match telegram.poll().await {
-            Ok(_) => (),
-            Err(e) => println!("Error occurred in Telegram: ${:?}", e)
-        };
-    } 
-    
+    let mut tasks: Vec<Box<dyn Future<Output = Result<(), PlatformError>>>> = vec![];
+
+    let mut telegram = if let Some(_) = bot.config.telegram {
+        Some(Telegram::new(&mut bot))
+    } else {
+        None
+    };
+    if let Some(mut t) = telegram {
+        tasks.push(Box::new(t.poll()));
+    }
 }
 
 fn save_dictionary(config: Config, dict: Dictionary) -> Result<(), DictionaryError> {
