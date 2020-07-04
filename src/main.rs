@@ -6,6 +6,7 @@ extern crate serde_json;
 extern crate serde_yaml;
 extern crate futures;
 extern crate tokio;
+extern crate rand_core;
 
 #[macro_use]
 mod util;
@@ -90,11 +91,11 @@ async fn main() {
         println!("Indices built.");
     }
 
-    let seeborg = SeeBorg::new(config, dict);
+    let mut seeborg = SeeBorg::new(config, dict);
 
     if seeborg.config.telegram.is_some() {
         println!("Enabling Telegram.");
-        let telegram = Telegram::new(&seeborg);
+        let mut telegram = Telegram::new(&mut seeborg);
         match telegram.poll().await {
             Ok(_) => (),
             Err(e) => println!("Error occurred in Telegram: ${:?}", e)
