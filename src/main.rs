@@ -24,9 +24,9 @@ use seeborg::SeeBorg;
 use std::error;
 use std::fmt;
 use std::path::Path;
+use std::pin::Pin;
 use std::sync::Arc;
 use telegram::Telegram;
-use std::pin::Pin;
 
 const CONFIG_PATH: &str = "config.yml";
 
@@ -56,6 +56,8 @@ impl From<telegram_bot::Error> for PlatformError {
         PlatformError::TelegramError(err)
     }
 }
+
+type PlatformTasks = Vec<Pin<Box<dyn Future<Output = Result<(), PlatformError>>>>>;
 
 #[tokio::main]
 async fn main() {
@@ -125,7 +127,7 @@ async fn main() {
     }
 
     let bot = Arc::new(Mutex::new(SeeBorg::new(config, dict)));
-    let mut tasks: Vec<Pin<Box<dyn Future<Output = Result<(), PlatformError>>>>> = vec![];
+    let mut tasks: PlatformTasks = vec![];
 
     let telegram = if bot.lock().await.config.telegram.is_some() {
         Some(Arc::new(Mutex::new(Telegram::new(bot).await)))
