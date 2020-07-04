@@ -6,6 +6,6 @@ struct Discord<'a> {
 
 impl Discord<'_> {
     fn new(seeborg: &SeeBorg) -> Discord {
-        Discord { seeborg: seeborg }
+        Discord { seeborg }
     }
 }

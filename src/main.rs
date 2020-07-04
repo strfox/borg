@@ -124,6 +124,11 @@ async fn main() {
         println!("Indices need to be built. Building indices.");
         dict.rebuild_indices();
         println!("Indices built.");
+
+        match save_dictionary(&config, &dict) {
+            Ok(_) => {},
+            Err(e) => println!("Couldn't save dictionary, error: {:?}", e),
+        }
     }
 
     let bot = Arc::new(Mutex::new(SeeBorg::new(config, dict)));
@@ -145,7 +150,7 @@ async fn main() {
     futures::future::join_all(tasks).await;
 }
 
-fn save_dictionary(config: Config, dict: Dictionary) -> Result<(), DictionaryError> {
+fn save_dictionary(config: &Config, dict: &Dictionary) -> Result<(), DictionaryError> {
     match dict.write_to_disk(Path::new(&config.dictionary_path)) {
         Ok(_) => Ok(()),
         Err(e) => {

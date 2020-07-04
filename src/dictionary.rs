@@ -94,7 +94,7 @@ impl Dictionary {
     }
 
     pub fn needs_to_build_indices(&self) -> bool {
-        self.sentences.len() > 0 && self.indices.len() == 0
+        !self.sentences.is_empty() && self.indices.is_empty()
     }
 
     pub fn rebuild_indices(&mut self) {
@@ -107,6 +107,7 @@ impl Dictionary {
             .enumerate()
             .map(|(i, sentence)| (i, sentence.to_lowercase()))
             .for_each(|(i, sentence)| {
+                println!("Indexing: {:?}", sentence);
                 let words = split_words(&sentence);
                 for word in words {
                     insert_word_into_indices(&mut indices, word, i);
@@ -179,8 +180,8 @@ impl Dictionary {
     fn sentences_with_word(&self, word: &str) -> Vec<&str> {
         self.indices
             .get(word)
-            .and_then(|ys| Some(ys.iter().map(|y| self.sentences[*y].as_str()).collect()))
-            .unwrap_or_else(|| vec![])
+            .map(|ys| ys.iter().map(|y| self.sentences[*y].as_str()).collect())
+            .unwrap_or_else(Vec::new)
     }
 }
 
@@ -209,7 +210,7 @@ fn insert_word_into_indices(indices: &mut Indices, word: &str, sentence_index: u
     }
 }
 
-fn pick_random<'a, T>(v: &'a Vec<T>, rng: &mut dyn RngCore) -> &'a T {
+fn pick_random<'a, T>(v: &'a [T], rng: &mut dyn RngCore) -> &'a T {
     &v[rng.next_u64() as usize % v.len()]
 }
 
@@ -229,7 +230,7 @@ fn get_words_left_of_pivot<'a>(line: &'a str, pivot: &'a str) -> Option<Vec<&'a 
     words
         .iter()
         .position(|word| word == &pivot)
-        .and_then(|pivot_position| Some(words[0..pivot_position].to_vec()))
+        .map(|pivot_position| words[0..pivot_position].to_vec())
 }
 
 fn get_words_right_of_pivot_inclusive<'a>(line: &'a str, pivot: &'a str) -> Option<Vec<&'a str>> {
@@ -237,7 +238,7 @@ fn get_words_right_of_pivot_inclusive<'a>(line: &'a str, pivot: &'a str) -> Opti
     words
         .iter()
         .position(|word| word == &pivot)
-        .and_then(|pivot_position| Some(words[pivot_position..words.len()].to_vec()))
+        .map(|pivot_position| words[pivot_position..words.len()].to_vec())
 }
 
 #[cfg(test)]

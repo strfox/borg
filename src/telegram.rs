@@ -3,7 +3,7 @@ use crate::PlatformError;
 use futures::lock::Mutex;
 use futures::StreamExt;
 use std::sync::Arc;
-use telegram_bot::requests::send_message::CanReplySendMessage;
+use telegram_bot::requests::send_message::{CanSendMessage};
 use telegram_bot::{Api, MessageKind, UpdateKind};
 
 pub struct Telegram {
@@ -23,7 +23,7 @@ impl Telegram {
             .token
             .clone();
         Telegram {
-            seeborg: seeborg,
+            seeborg,
             api: Api::new(token),
         }
     }
@@ -33,12 +33,11 @@ impl Telegram {
             let update = update?;
             if let UpdateKind::Message(message) = update.kind {
                 if let MessageKind::Text { ref data, .. } = message.kind {
-                    match self.seeborg.lock().await.respond_to(data) {
-                        Some(response) => {
-                            self.api.send(message.text_reply(response)).await?;
-                        }
-                        None => {}
+                    let mut seeborg = self.seeborg.lock().await;
+                    if let Some(response) = seeborg.respond_to(data) {
+                        self.api.send(message.chat.text(response)).await?;
                     }
+                    seeborg.learn(data);
                 }
             }
         }
