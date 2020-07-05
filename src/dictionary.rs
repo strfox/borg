@@ -117,7 +117,7 @@ impl Dictionary {
     }
 
     fn knows_sentence(&self, sentence: &str) -> bool {
-        self.sentences.binary_search(&sentence.to_owned()).is_ok()
+        self.sentences.iter().any(|x| x == sentence)
     }
 
     fn knows_word(&self, word: &str) -> bool {

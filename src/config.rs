@@ -45,14 +45,14 @@ impl From<serde_yaml::Error> for ConfigError {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Behavior {
-    pub speaking: bool,
-    pub learning: bool,
-    pub reply_rate: f32,
-    pub reply_nick: f32,
-    pub reply_magic: f32,
-    pub magic_patterns: Vec<String>,
-    pub blacklisted_patterns: Vec<String>,
-    pub ignored_users: Vec<String>,
+    pub speaking: Option<bool>,
+    pub learning: Option<bool>,
+    pub reply_rate: Option<f32>,
+    pub reply_nick: Option<f32>,
+    pub reply_magic: Option<f32>,
+    pub magic_patterns: Option<Vec<String>>,
+    pub blacklisted_patterns: Option<Vec<String>>,
+    pub ignored_users: Option<Vec<String>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
