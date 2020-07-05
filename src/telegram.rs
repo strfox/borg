@@ -12,21 +12,13 @@ pub struct Telegram {
 }
 
 impl Telegram {
-    pub async fn new(seeborg: Arc<Mutex<SeeBorg>>) -> Telegram {
-        let token = seeborg
-            .lock()
-            .await
-            .config
-            .telegram
-            .as_ref()
-            .expect("Telegram not defined")
-            .token
-            .clone();
+    pub fn new(token: &str, seeborg: Arc<Mutex<SeeBorg>>) -> Telegram {
         Telegram {
             seeborg,
             api: Api::new(token),
         }
     }
+    
     pub async fn poll(&mut self) -> Result<(), PlatformError> {
         let mut stream = self.api.stream();
         while let Some(update) = stream.next().await {

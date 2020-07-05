@@ -131,15 +131,14 @@ async fn main() {
         }
     }
 
-    let bot = Arc::new(Mutex::new(SeeBorg::new(config, dict)));
+    let seeborg = Arc::new(Mutex::new(SeeBorg::new(config, dict)));
     let mut tasks: PlatformTasks = vec![];
 
-    let telegram = if bot.lock().await.config.telegram.is_some() {
-        Some(Arc::new(Mutex::new(Telegram::new(bot).await)))
+    let telegram = if let Some(telegram_token) = seeborg.lock().await.get_telegram_token() {
+        Some(Arc::new(Mutex::new(Telegram::new(telegram_token, seeborg.clone()))))
     } else {
         None
     };
-
     if let Some(shared_t) = telegram {
         tasks.push(Box::pin(async move {
             let mut telegram = shared_t.lock().await;
