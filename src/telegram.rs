@@ -42,7 +42,5 @@ impl Telegram {
 }
 
 fn message_is_older_than_now(message: &Message) -> bool {
-    use crate::util::unix_time;
-    let now = unix_time() as i64;
-    message.date < now
+    message.date < crate::util::unix_time() as i64
 }
