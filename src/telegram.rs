@@ -3,7 +3,8 @@ use crate::PlatformError;
 use futures::lock::Mutex;
 use futures::StreamExt;
 use std::sync::Arc;
-use telegram_bot::requests::send_message::{CanSendMessage};
+use telegram_bot::requests::send_message::CanSendMessage;
+use telegram_bot::types::Message;
 use telegram_bot::{Api, MessageKind, UpdateKind};
 
 pub struct Telegram {
@@ -18,12 +19,15 @@ impl Telegram {
             api: Api::new(token),
         }
     }
-    
+
     pub async fn poll(&mut self) -> Result<(), PlatformError> {
         let mut stream = self.api.stream();
         while let Some(update) = stream.next().await {
             let update = update?;
             if let UpdateKind::Message(message) = update.kind {
+                if message_is_older_than_now(&message) {
+                    continue;
+                }
                 if let MessageKind::Text { ref data, .. } = message.kind {
                     let mut seeborg = self.seeborg.lock().await;
                     if let Some(response) = seeborg.respond_to(data) {
@@ -35,4 +39,10 @@ impl Telegram {
         }
         Ok(())
     }
+}
+
+fn message_is_older_than_now(message: &Message) -> bool {
+    use crate::util::unix_time;
+    let now = unix_time() as i64;
+    message.date < now
 }

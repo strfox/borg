@@ -126,7 +126,7 @@ async fn main() {
         println!("Indices built.");
 
         match save_dictionary(&config, &dict) {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(e) => println!("Couldn't save dictionary, error: {:?}", e),
         }
     }
@@ -135,7 +135,10 @@ async fn main() {
     let mut tasks: PlatformTasks = vec![];
 
     let telegram = if let Some(telegram_token) = seeborg.lock().await.get_telegram_token() {
-        Some(Arc::new(Mutex::new(Telegram::new(telegram_token, seeborg.clone()))))
+        Some(Arc::new(Mutex::new(Telegram::new(
+            telegram_token,
+            seeborg.clone(), /* clones the Arc, not the SeeBorg instance */
+        ))))
     } else {
         None
     };

@@ -16,3 +16,11 @@ macro_rules! hashmap {
         ::std::collections::HashMap::new()
     }}
 }
+
+pub fn unix_time() -> u64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("Time went backwards")
+        .as_secs()
+}
