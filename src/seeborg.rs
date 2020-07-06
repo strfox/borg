@@ -36,7 +36,7 @@ impl SeeBorg {
         self.dictionary.learn(line);
     }
 
-    pub fn reply_to(
+    pub fn should_reply_to(
         &mut self,
         user_id: &str,
         behavior_override: Option<&OverrideBehavior>,
