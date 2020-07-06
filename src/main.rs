@@ -17,7 +17,7 @@ mod seeborg;
 mod telegram;
 
 use config::{Config, ConfigError};
-use dictionary::{Dictionary, DictionaryError};
+use dictionary::{Dictionary, Error};
 use futures::lock::Mutex;
 use futures::Future;
 use seeborg::SeeBorg;
@@ -67,23 +67,23 @@ async fn main() {
     let config = match Config::load(Path::new(CONFIG_PATH)) {
         Ok(c) => c,
         Err(e) => match e {
-            ConfigError::IOError(io_err) => {
-                println!(
+            ConfigError::IOError(e) => {
+                eprintln!(
                     "An I/O error happened and the program could not \
                     read the configuration file. Please make sure that the \
                     file exists and that the program has permissions to read \
                     it. Details: {:?}",
-                    io_err.to_string()
+                    e
                 );
                 return;
             }
-            ConfigError::YAMLError(yaml_err) => {
-                println!(
+            ConfigError::YAMLError(e) => {
+                eprintln!(
                     "A YAML parsing error occurred. This is most \
                     likely due to a malformed configuration file. Please check \
                     that your configuration is correct and try again. \
                     Details on the YAML parsing error: {:?}",
-                    yaml_err.to_string()
+                    e
                 );
                 return;
             }
@@ -95,23 +95,23 @@ async fn main() {
     let mut dict = match Dictionary::load(Path::new(&config.dictionary_path)) {
         Ok(d) => d,
         Err(e) => match e {
-            DictionaryError::IOError(io_err) => {
-                println!(
+            Error::IOError(e) => {
+                eprintln!(
                     "An I/O error happened while trying to read the dictionary \
                 file, located at \"{:?}\". Please ensure that the file is present \
                 at such location and make sure that this program has read and write \
                 permissions. Details: {:?}",
                     config.dictionary_path,
-                    io_err.to_string()
+                    e
                 );
                 return;
             }
-            DictionaryError::JSONError(json_err) => {
-                println!(
+            Error::JSONError(e) => {
+                eprintln!(
                     "A JSON parsing error occurred. This is most likely due to \
                 a corrupted dictionary file. Please check the dictionary file for any \
                 anomalies. Details on the JSON parsing error: {:?}",
-                    json_err.to_string()
+                    e
                 );
                 return;
             }
@@ -153,12 +153,12 @@ async fn main() {
     futures::future::join_all(tasks).await;
 }
 
-fn save_dictionary(config: &Config, dict: &Dictionary) -> Result<(), DictionaryError> {
+fn save_dictionary(config: &Config, dict: &Dictionary) -> Result<(), Error> {
     match dict.write_to_disk(Path::new(&config.dictionary_path)) {
         Ok(_) => Ok(()),
         Err(e) => {
-            println!(
-                "Error: Cannot write to dictionary file. Please ensure that the program \
+            eprintln!(
+                "Cannot write to dictionary file. Please ensure that the program \
                 has the necessary permissions to write to the dictionary."
             );
             Err(e)

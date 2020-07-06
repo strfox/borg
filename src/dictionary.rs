@@ -9,38 +9,38 @@ use std::io;
 use std::path::Path;
 
 #[derive(Debug)]
-pub enum DictionaryError {
+pub enum Error {
     IOError(io::Error),
     JSONError(serde_json::Error),
 }
 
-impl fmt::Display for DictionaryError {
+impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            DictionaryError::IOError(ref e) => e.fmt(f),
-            DictionaryError::JSONError(ref e) => e.fmt(f),
+            Error::IOError(ref e) => e.fmt(f),
+            Error::JSONError(ref e) => e.fmt(f),
         }
     }
 }
 
-impl error::Error for DictionaryError {
+impl error::Error for Error {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match *self {
-            DictionaryError::IOError(ref e) => Some(e),
-            DictionaryError::JSONError(ref e) => Some(e),
+            Error::IOError(ref e) => Some(e),
+            Error::JSONError(ref e) => Some(e),
         }
     }
 }
 
-impl From<io::Error> for DictionaryError {
-    fn from(err: io::Error) -> DictionaryError {
-        DictionaryError::IOError(err)
+impl From<io::Error> for Error {
+    fn from(err: io::Error) -> Error {
+        Error::IOError(err)
     }
 }
 
-impl From<serde_json::Error> for DictionaryError {
-    fn from(err: serde_json::Error) -> DictionaryError {
-        DictionaryError::JSONError(err)
+impl From<serde_json::Error> for Error {
+    fn from(err: serde_json::Error) -> Error {
+        Error::JSONError(err)
     }
 }
 
@@ -64,7 +64,7 @@ impl Dictionary {
     // load loads a dictionary from the specified path.
     // If there is no file at the specified path, it will create a blank
     // dictionary at that location.
-    pub fn load(path: &Path) -> Result<Self, DictionaryError> {
+    pub fn load(path: &Path) -> Result<Self, Error> {
         if !path.is_file() {
             let d = Dictionary::new_empty();
             d.write_to_disk(&path)?;
@@ -76,7 +76,7 @@ impl Dictionary {
         }
     }
 
-    pub fn write_to_disk(&self, path: &Path) -> Result<(), DictionaryError> {
+    pub fn write_to_disk(&self, path: &Path) -> Result<(), Error> {
         let json = serde_json::to_string(&self)?;
         fs::write(path, json)?;
         Ok(())
@@ -212,17 +212,6 @@ fn insert_word_into_indices(indices: &mut Indices, word: &str, sentence_index: u
 
 fn pick_random<'a, T>(v: &'a [T], rng: &mut dyn RngCore) -> &'a T {
     &v[rng.next_u64() as usize % v.len()]
-}
-
-// TODO: maybe delete this
-fn word_position<'a>(line: &'a str, word: &'a str) -> Option<usize> {
-    let words = split_words(line);
-    let index = words.iter().take_while(|x| *x != &word).count();
-    if index == words.len() {
-        None
-    } else {
-        Some(index)
-    }
 }
 
 fn get_words_left_of_pivot<'a>(line: &'a str, pivot: &'a str) -> Option<Vec<&'a str>> {
@@ -603,15 +592,6 @@ mod tests {
         assert_eq!(empty, dict.sentences_with_word("nonexisting"));
         assert_eq!(empty, dict.sentences_with_word("luve"));
         assert_eq!(empty, dict.sentences_with_word(""));
-    }
-
-    #[test]
-    fn test_word_position() {
-        assert_eq!(Some(0), word_position("i like cake", "i"));
-        assert_eq!(Some(1), word_position("i like cake", "like"));
-        assert_eq!(Some(2), word_position("i like cake", "cake"));
-        assert_eq!(None, word_position("i like cake", "john"));
-        assert_eq!(Some(2), word_position("i like cake i like cake", "cake"));
     }
 
     #[test]
