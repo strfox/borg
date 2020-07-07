@@ -1,21 +1,28 @@
-use crate::seeborg::SeeBorg;
-use crate::PlatformError;
+use crate::{
+    config,
+    config::{BehaviorOverride, BehaviorOverrideValueResolver},
+    seeborg::SeeBorg,
+    PlatformError,
+};
 use futures::lock::Mutex;
 use futures::StreamExt;
 use std::sync::Arc;
-use telegram_bot::requests::send_message::CanSendMessage;
-use telegram_bot::types::Message;
-use telegram_bot::{Api, MessageKind, UpdateKind};
+use telegram_bot::{
+    requests::send_message::CanSendMessage, types::Message, Api, ChatId, MessageKind, UpdateKind,
+};
 
 pub struct Telegram {
     seeborg: Arc<Mutex<SeeBorg>>,
+    platform_config: config::Platform,
     api: Api,
 }
 
 impl Telegram {
-    pub fn new(token: &str, seeborg: Arc<Mutex<SeeBorg>>) -> Telegram {
+    pub fn new(platform_config: config::Platform, seeborg: Arc<Mutex<SeeBorg>>) -> Telegram {
+        let token = platform_config.token.clone();
         Telegram {
             seeborg,
+            platform_config,
             api: Api::new(token),
         }
     }
@@ -30,6 +37,7 @@ impl Telegram {
                 }
                 if let MessageKind::Text { ref data, .. } = message.kind {
                     let mut seeborg = self.seeborg.lock().await;
+                    let chat_id: i64 = message.chat.id().into();
                     if let Some(response) = seeborg.respond_to(data) {
                         self.api.send(message.chat.text(response)).await?;
                     }
@@ -38,6 +46,33 @@ impl Telegram {
             }
         }
         Ok(())
+    }
+
+    async fn behavior_for_chat<'a>(
+        &'a self,
+        chat_id: &ChatId,
+    ) -> Option<BehaviorOverrideValueResolver<'a>> {
+        self.platform_config
+            .behavior
+            .as_ref()
+            .map(|b| {
+                (
+                    b,
+                    self.override_for_chat(&chat_id)
+                        .map(|o| Box::new(BehaviorOverrideValueResolver::new(o, None))),
+                )
+            })
+            .map(|(b, o)| BehaviorOverrideValueResolver::new(b, o))
+    }
+
+    fn override_for_chat(&self, chat_id: &ChatId) -> Option<&BehaviorOverride> {
+        let chat_id: i64 = (*chat_id).into();
+        let chat_id = chat_id.to_string();
+        self.platform_config
+            .chat_behaviors
+            .as_ref()
+            .and_then(|bs| bs.iter().find(|cb| cb.chat_id == chat_id))
+            .map(|cb| &cb.behavior)
     }
 }
 

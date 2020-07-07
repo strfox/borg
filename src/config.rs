@@ -43,7 +43,19 @@ impl From<serde_yaml::Error> for ConfigError {
 }
 
 /////////////////////////////////////////////////////////////////////////////
-// Configuration Types
+// PatternOwner trait
+/////////////////////////////////////////////////////////////////////////////
+
+/// Any struct that has Patterns in it can optionally implement this trait
+/// to allow eager compilation of all patterns
+trait PatternOwner {
+    /// compile_patterns should compile all Pattern objects in the implementing
+    /// struct.
+    fn compile_patterns(&mut self) -> Result<(), PatternError>;
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// Config Struct
 /////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -55,47 +67,8 @@ pub struct Config {
     pub discord: Option<Platform>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct MainBehavior {
-    pub speaking: bool,
-    pub learning: bool,
-    pub reply_rate: f32,
-    pub reply_nick: f32,
-    pub reply_magic: f32,
-    pub nick_patterns: Vec<Pattern>,
-    pub magic_patterns: Vec<Pattern>,
-    pub blacklisted_patterns: Vec<Pattern>,
-    pub ignored_users: Vec<Pattern>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct OverrideBehavior {
-    pub speaking: Option<bool>,
-    pub learning: Option<bool>,
-    pub reply_rate: Option<f32>,
-    pub reply_nick: Option<f32>,
-    pub reply_magic: Option<f32>,
-    pub nick_patterns: Option<Vec<Pattern>>,
-    pub magic_patterns: Option<Vec<Pattern>>,
-    pub blacklisted_patterns: Option<Vec<Pattern>>,
-    pub ignored_users: Option<Vec<Pattern>>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ChatBehavior {
-    pub chat_id: String,
-    pub behavior: OverrideBehavior,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Platform {
-    pub token: String,
-    pub behavior: Option<OverrideBehavior>,
-    pub chat_behaviors: Option<Vec<MainBehavior>>,
-}
-
 /////////////////////////////////////////////////////////////////////////////
-// Config implementations
+// Config Implementations
 /////////////////////////////////////////////////////////////////////////////
 
 // NewConfig creates a new configuration file from a file at the given path.
@@ -112,7 +85,105 @@ impl Config {
 }
 
 /////////////////////////////////////////////////////////////////////////////
-// Pattern
+// MainBehavior Struct
+/////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MainBehavior {
+    pub speaking: bool,
+    pub learning: bool,
+    pub reply_rate: f32,
+    pub reply_nick: f32,
+    pub reply_magic: f32,
+    pub nick_patterns: Vec<Pattern>,
+    pub magic_patterns: Vec<Pattern>,
+    pub blacklisted_patterns: Vec<Pattern>,
+    pub ignored_users: Vec<Pattern>,
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// MainBehavior Implementations
+/////////////////////////////////////////////////////////////////////////////
+
+impl PatternOwner for MainBehavior {
+    fn compile_patterns(&mut self) -> Result<(), PatternError> {
+        for p in self
+            .magic_patterns
+            .iter_mut()
+            .chain(self.blacklisted_patterns.iter_mut())
+            .chain(self.nick_patterns.iter_mut())
+        {
+            p.regex()?;
+        }
+        Ok(())
+    }
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// OverrideBehavior Struct
+/////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BehaviorOverride {
+    pub speaking: Option<bool>,
+    pub learning: Option<bool>,
+    pub reply_rate: Option<f32>,
+    pub reply_nick: Option<f32>,
+    pub reply_magic: Option<f32>,
+    pub nick_patterns: Option<Vec<Pattern>>,
+    pub magic_patterns: Option<Vec<Pattern>>,
+    pub blacklisted_patterns: Option<Vec<Pattern>>,
+    pub ignored_users: Option<Vec<Pattern>>,
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// OverrideBehavior Implementations
+/////////////////////////////////////////////////////////////////////////////
+
+impl PatternOwner for BehaviorOverride {
+    fn compile_patterns(&mut self) -> Result<(), PatternError> {
+        if let Some(ref mut ps) = self.magic_patterns {
+            for p in ps.iter_mut() {
+                p.regex()?;
+            }
+        }
+        if let Some(ref mut ps) = self.blacklisted_patterns {
+            for p in ps.iter_mut() {
+                p.regex()?;
+            }
+        }
+        if let Some(ref mut ps) = self.nick_patterns {
+            for p in ps.iter_mut() {
+                p.regex()?;
+            }
+        }
+        Ok(())
+    }
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// ChatBehavior Struct
+/////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ChatBehaviorOverrides {
+    pub chat_id: String,
+    pub behavior: BehaviorOverride,
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// Platform Struct
+/////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Platform {
+    pub token: String,
+    pub behavior: Option<BehaviorOverride>,
+    pub chat_behaviors: Option<Vec<ChatBehaviorOverrides>>,
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// Pattern Error Type
 /////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
@@ -142,12 +213,20 @@ impl From<onig::Error> for PatternError {
     }
 }
 
+/////////////////////////////////////////////////////////////////////////////
+// Pattern Struct
+/////////////////////////////////////////////////////////////////////////////
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Pattern {
     #[serde(skip)]
     compiled: Option<Regex>,
     pub original: String,
 }
+
+/////////////////////////////////////////////////////////////////////////////
+// Pattern Implementations
+/////////////////////////////////////////////////////////////////////////////
 
 impl Pattern {
     pub fn regex(&mut self) -> Result<&Regex, PatternError> {
@@ -174,71 +253,177 @@ fn matches_any(input: &str, patterns: &mut Vec<Pattern>) -> Result<bool, Pattern
 }
 
 /////////////////////////////////////////////////////////////////////////////
-// Behavior trait
+// BehaviorValues Struct
 /////////////////////////////////////////////////////////////////////////////
 
-trait Behavior {
-    /// compile_patterns should ompile all Pattern objects in the Behavior
-    fn compile_patterns(&mut self) -> Result<(), PatternError>;
+pub struct BehaviorValueResolver<'a> {
+    behavior: &'a MainBehavior,
+    override_: Option<BehaviorOverrideValueResolver<'a>>,
 }
 
 /////////////////////////////////////////////////////////////////////////////
-// MainBehavior Implementations
+// BehaviorValues Implementations
 /////////////////////////////////////////////////////////////////////////////
 
-impl MainBehavior {
-    pub fn triggers_reply_nick(&mut self, line: &str) -> Result<bool, PatternError> {
-        matches_any(line, &mut self.blacklisted_patterns)
+impl<'a> BehaviorValueResolver<'a> {
+    pub fn new(
+        behavior: &'a MainBehavior,
+        override_: Option<BehaviorOverrideValueResolver<'a>>,
+    ) -> BehaviorValueResolver<'a> {
+        BehaviorValueResolver {
+            behavior,
+            override_,
+        }
     }
 
-    pub fn triggers_reply_magic(&mut self, line: &str) -> Result<bool, PatternError> {
-        matches_any(line, &mut self.magic_patterns)
+    pub fn is_speaking(&self) -> bool {
+        self.override_
+            .as_ref()
+            .and_then(|o| o.is_speaking())
+            .unwrap_or(self.behavior.speaking)
     }
 
-    pub fn triggers_blacklist(&mut self, line: &str) -> Result<bool, PatternError> {
-        matches_any(line, &mut self.blacklisted_patterns)
+    pub fn is_learning(&self) -> bool {
+        self.override_
+            .as_ref()
+            .and_then(|o| o.is_speaking())
+            .unwrap_or(self.behavior.learning)
     }
 
-    pub fn should_ignore(&mut self, user_id: &str) -> Result<bool, PatternError> {
-        matches_any(user_id, &mut self.ignored_users)
+    pub fn reply_rate(&self) -> f32 {
+        self.override_
+            .as_ref()
+            .and_then(|o| o.reply_rate())
+            .unwrap_or(self.behavior.reply_rate)
+    }
+
+    pub fn reply_magic(&self) -> f32 {
+        self.override_
+            .as_ref()
+            .and_then(|o| o.reply_magic())
+            .unwrap_or(self.behavior.reply_magic)
+    }
+
+    pub fn reply_nick(&self) -> f32 {
+        self.override_
+            .as_ref()
+            .and_then(|o| o.reply_nick())
+            .unwrap_or(self.behavior.reply_nick)
+    }
+
+    pub fn nick_patterns(&self) -> &Vec<Pattern> {
+        self.override_
+            .as_ref()
+            .and_then(|o| o.nick_patterns())
+            .unwrap_or(&self.behavior.nick_patterns)
+    }
+
+    pub fn magic_patterns(&self) -> &Vec<Pattern> {
+        self.override_
+            .as_ref()
+            .and_then(|o| o.magic_patterns())
+            .unwrap_or(&self.behavior.magic_patterns)
+    }
+
+    pub fn blacklisted_patterns(&self) -> &Vec<Pattern> {
+        self.override_
+            .as_ref()
+            .and_then(|o| o.blacklisted_patterns())
+            .unwrap_or(&self.behavior.blacklisted_patterns)
+    }
+
+    pub fn ignored_users(&self) -> &Vec<Pattern> {
+        self.override_
+            .as_ref()
+            .and_then(|o| o.ignored_users())
+            .unwrap_or(&self.behavior.ignored_users)
     }
 }
 
-impl Behavior for MainBehavior {
-    fn compile_patterns(&mut self) -> Result<(), PatternError> {
-        for p in self
-            .magic_patterns
-            .iter_mut()
-            .chain(self.blacklisted_patterns.iter_mut())
-            .chain(self.nick_patterns.iter_mut())
-        {
-            p.regex()?;
-        }
-        Ok(())
-    }
+/////////////////////////////////////////////////////////////////////////////
+// OverrideResolver Struct
+/////////////////////////////////////////////////////////////////////////////
+
+pub struct BehaviorOverrideValueResolver<'a> {
+    behavior: &'a BehaviorOverride,
+    override_: Option<Box<BehaviorOverrideValueResolver<'a>>>,
 }
 
 /////////////////////////////////////////////////////////////////////////////
-// OverrideBehavior Implementations
+// OverrideResolver Implementations
 /////////////////////////////////////////////////////////////////////////////
 
-impl Behavior for OverrideBehavior {
-    fn compile_patterns(&mut self) -> Result<(), PatternError> {
-        if let Some(ref mut ps) = self.magic_patterns {
-            for p in ps.iter_mut() {
-                p.regex()?;
-            }
+impl<'a> BehaviorOverrideValueResolver<'a> {
+    pub fn new(
+        behavior: &'a BehaviorOverride,
+        override_: Option<Box<BehaviorOverrideValueResolver<'a>>>,
+    ) -> BehaviorOverrideValueResolver<'a> {
+        BehaviorOverrideValueResolver {
+            behavior,
+            override_,
         }
-        if let Some(ref mut ps) = self.blacklisted_patterns {
-            for p in ps.iter_mut() {
-                p.regex()?;
-            }
-        }
-        if let Some(ref mut ps) = self.nick_patterns {
-            for p in ps.iter_mut() {
-                p.regex()?;
-            }
-        }
-        Ok(())
+    }
+
+    pub fn is_speaking(&self) -> Option<bool> {
+        self.override_
+            .as_ref()
+            .map(|o| o.is_speaking())
+            .unwrap_or(self.behavior.speaking)
+    }
+
+    pub fn is_learning(&self) -> Option<bool> {
+        self.override_
+            .as_ref()
+            .map(|o| o.is_speaking())
+            .unwrap_or(self.behavior.learning)
+    }
+
+    pub fn reply_rate(&self) -> Option<f32> {
+        self.override_
+            .as_ref()
+            .map(|o| o.reply_rate())
+            .unwrap_or(self.behavior.reply_rate)
+    }
+
+    pub fn reply_magic(&self) -> Option<f32> {
+        self.override_
+            .as_ref()
+            .map(|o| o.reply_magic())
+            .unwrap_or(self.behavior.reply_magic)
+    }
+
+    pub fn reply_nick(&self) -> Option<f32> {
+        self.override_
+            .as_ref()
+            .map(|o| o.reply_nick())
+            .unwrap_or(self.behavior.reply_nick)
+    }
+
+    pub fn nick_patterns(&self) -> Option<&Vec<Pattern>> {
+        self.override_
+            .as_ref()
+            .map(|o| o.nick_patterns())
+            .unwrap_or(self.behavior.nick_patterns.as_ref())
+    }
+
+    pub fn magic_patterns(&self) -> Option<&Vec<Pattern>> {
+        self.override_
+            .as_ref()
+            .map(|o| o.magic_patterns())
+            .unwrap_or(self.behavior.magic_patterns.as_ref())
+    }
+
+    pub fn blacklisted_patterns(&self) -> Option<&Vec<Pattern>> {
+        self.override_
+            .as_ref()
+            .map(|o| o.blacklisted_patterns())
+            .unwrap_or(self.behavior.blacklisted_patterns.as_ref())
+    }
+
+    pub fn ignored_users(&self) -> Option<&Vec<Pattern>> {
+        self.override_
+            .as_ref()
+            .map(|o| o.ignored_users())
+            .unwrap_or(self.behavior.ignored_users.as_ref())
     }
 }

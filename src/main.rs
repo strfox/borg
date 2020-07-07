@@ -131,13 +131,12 @@ async fn main() {
         }
     }
 
-    let telegram_token = config.telegram.map(|t| t.token);
-    let seeborg = Arc::new(Mutex::new(SeeBorg::new(config.behavior, dict)));
+    let seeborg = Arc::new(Mutex::new(SeeBorg::new(dict)));
     let mut tasks: PlatformTasks = vec![];
 
-    let telegram = if let Some(telegram_token) = telegram_token {
+    let telegram = if let Some(telegram_config) = config.telegram {
         Some(Arc::new(Mutex::new(Telegram::new(
-            &telegram_token,
+            telegram_config,
             seeborg.clone(), /* clones the Arc, not the SeeBorg instance */
         ))))
     } else {

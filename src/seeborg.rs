@@ -1,6 +1,8 @@
-use crate::config::{MainBehavior, OverrideBehavior};
-use crate::dictionary::Dictionary;
-use crate::rand_core::RngCore;
+use crate::{
+    config::{BehaviorOverrideValueResolver, BehaviorValueResolver, MainBehavior},
+    dictionary::Dictionary,
+    rand_core::RngCore,
+};
 use rand::rngs::SmallRng;
 use rand_core::SeedableRng;
 
@@ -9,7 +11,6 @@ use rand_core::SeedableRng;
 /////////////////////////////////////////////////////////////////////////////
 
 pub struct SeeBorg {
-    behavior: MainBehavior,
     dictionary: Dictionary,
     rng: SmallRng,
 }
@@ -20,9 +21,8 @@ pub struct SeeBorg {
 
 /// This implementation is platform agnostic.
 impl SeeBorg {
-    pub fn new(behavior: MainBehavior, dictionary: Dictionary) -> SeeBorg {
+    pub fn new(dictionary: Dictionary) -> SeeBorg {
         SeeBorg {
-            behavior,
             dictionary,
             rng: SmallRng::from_entropy(),
         }
@@ -39,7 +39,7 @@ impl SeeBorg {
     pub fn should_reply_to(
         &mut self,
         user_id: &str,
-        behavior_override: Option<&OverrideBehavior>,
+        behavior: Option<&BehaviorOverrideValueResolver>,
     ) -> bool {
         todo!()
     }
