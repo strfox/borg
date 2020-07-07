@@ -48,7 +48,7 @@ impl Telegram {
         Ok(())
     }
 
-    async fn behavior_for_chat<'a>(
+    fn behavior_for_chat<'a>(
         &'a self,
         chat_id: &ChatId,
     ) -> Option<BehaviorOverrideValueResolver<'a>> {
