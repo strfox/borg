@@ -2,52 +2,147 @@ use crate::{
     config,
     config::{BehaviorOverride, BehaviorOverrideValueResolver},
     seeborg::SeeBorg,
-    PlatformError,
 };
+use carapax::{handler, types::Command, webhook, Api, ApiError, Dispatcher};
 use futures::lock::Mutex;
-use futures::StreamExt;
-use std::sync::Arc;
-use telegram_bot::{
-    requests::send_message::CanSendMessage, types::Message, Api, ChatId, MessageKind, UpdateKind,
-};
+use std::{error, fmt, net::SocketAddr, num::ParseIntError, sync::Arc};
+
+/////////////////////////////////////////////////////////////////////////////
+// RunError
+/////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub enum RunError {
+    SocketAddressParseError(SocketAddrParseError),
+    WebhookError(WebhookError),
+}
+
+impl fmt::Display for RunError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            RunError::SocketAddressParseError(ref e) => e.fmt(f),
+            RunError::WebhookError(ref e) => e.fmt(f),
+        }
+    }
+}
+
+impl error::Error for RunError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        match *self {
+            RunError::SocketAddressParseError(ref e) => Some(e),
+            RunError::WebhookError(ref e) => Some(e),
+        }
+    }
+}
+
+impl From<SocketAddrParseError> for RunError {
+    fn from(err: SocketAddrParseError) -> RunError {
+        RunError::SocketAddressParseError(err)
+    }
+}
+
+impl From<WebhookError> for RunError {
+    fn from(err: WebhookError) -> RunError {
+        RunError::WebhookError(err)
+    }
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// SocketAddrParse Error
+/////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct SocketAddrParseError {
+    bad_string: String,
+}
+
+impl fmt::Display for SocketAddrParseError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Cannot parse socket address: {}", self.bad_string)
+    }
+}
+
+impl error::Error for SocketAddrParseError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        None
+    }
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// Webhook Error
+/////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct WebhookError {
+    message: String,
+}
+
+impl fmt::Display for WebhookError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Webhook error: {}", self.message)
+    }
+}
+
+impl error::Error for WebhookError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        None
+    }
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// Telegram Struct
+/////////////////////////////////////////////////////////////////////////////
 
 pub struct Telegram {
     seeborg: Arc<Mutex<SeeBorg>>,
-    platform_config: config::Platform,
+    platform_config: config::TelegramPlatform,
     api: Api,
 }
 
+/////////////////////////////////////////////////////////////////////////////
+// Telegram Implementations
+/////////////////////////////////////////////////////////////////////////////
+
 impl Telegram {
-    pub fn new(platform_config: config::Platform, seeborg: Arc<Mutex<SeeBorg>>) -> Telegram {
+    pub fn new(
+        platform_config: config::TelegramPlatform,
+        seeborg: Arc<Mutex<SeeBorg>>,
+    ) -> Result<Telegram, ApiError> {
         let token = platform_config.token.clone();
-        Telegram {
+        Api::new(token).map(|api| Telegram {
             seeborg,
             platform_config,
-            api: Api::new(token),
-        }
+            api,
+        })
     }
 
-    pub async fn poll(&mut self) -> Result<(), PlatformError> {
-        let mut stream = self.api.stream();
-        while let Some(update) = stream.next().await {
-            let update = update?;
-            if let UpdateKind::Message(message) = update.kind {
-                if message_is_older_than_now(&message) {
-                    continue;
-                }
-                if let MessageKind::Text { ref data, .. } = message.kind {
-                    let mut seeborg = self.seeborg.lock().await;
-                    let chat_id: i64 = message.chat.id().into();
-                    if let Some(response) = seeborg.respond_to(data) {
-                        self.api.send(message.chat.text(response)).await?;
-                    }
-                    seeborg.learn(data);
-                }
+    pub async fn run(&mut self) -> Result<(), RunError> {
+        let mut dispatcher = Dispatcher::new(self.api.clone());
+
+        #[handler(command = "/start")]
+        async fn start_command_handler(_context: &Api, _command: Command) {
+            todo!();
+        }
+
+        dispatcher.add_handler(start_command_handler);
+
+        let socket_addr: SocketAddr = match self.platform_config.webhook_bind_address.parse() {
+            Ok(o) => o,
+            Err(e) => {
+                return Err(RunError::SocketAddressParseError(SocketAddrParseError {
+                    bad_string: self.platform_config.webhook_bind_address.to_string(),
+                }))
             }
-        }
-        Ok(())
-    }
+        };
 
+        match webhook::run_server(socket_addr, "/seeborg", dispatcher).await {
+            Ok(_) => Ok(()),
+            Err(e) => Err(RunError::WebhookError(WebhookError {
+                message: e.to_string(),
+            })),
+        }
+    }
+    /*
     fn behavior_for_chat<'a>(
         &'a self,
         chat_id: &ChatId,
@@ -73,9 +168,9 @@ impl Telegram {
             .as_ref()
             .and_then(|bs| bs.iter().find(|cb| cb.chat_id == chat_id))
             .map(|cb| &cb.behavior)
-    }
+    }*/
 }
-
+/*
 fn message_is_older_than_now(message: &Message) -> bool {
     message.date < crate::util::unix_time() as i64
-}
+}*/

@@ -17,7 +17,7 @@ mod seeborg;
 mod telegram;
 
 use config::{Config, ConfigError};
-use dictionary::{Dictionary, Error};
+use dictionary::Dictionary;
 use futures::lock::Mutex;
 use futures::Future;
 use seeborg::SeeBorg;
@@ -26,38 +26,12 @@ use std::fmt;
 use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::error::Error;
 use telegram::Telegram;
 
 const CONFIG_PATH: &str = "config.yml";
 
-#[derive(Debug)]
-pub enum PlatformError {
-    TelegramError(telegram_bot::Error),
-}
-
-impl fmt::Display for PlatformError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            PlatformError::TelegramError(ref e) => e.fmt(f),
-        }
-    }
-}
-
-impl error::Error for PlatformError {
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        match *self {
-            PlatformError::TelegramError(ref e) => Some(e),
-        }
-    }
-}
-
-impl From<telegram_bot::Error> for PlatformError {
-    fn from(err: telegram_bot::Error) -> PlatformError {
-        PlatformError::TelegramError(err)
-    }
-}
-
-type PlatformTasks = Vec<Pin<Box<dyn Future<Output = Result<(), PlatformError>>>>>;
+type PlatformTasks = Vec<Pin<Box<dyn Future<Output = Result<(), Box<dyn Error>>>>>>;
 
 #[tokio::main]
 async fn main() {
@@ -95,18 +69,17 @@ async fn main() {
     let mut dict = match Dictionary::load(Path::new(&config.dictionary_path)) {
         Ok(d) => d,
         Err(e) => match e {
-            Error::IOError(e) => {
+            dictionary::Error::IOError(e) => {
                 eprintln!(
                     "An I/O error happened while trying to read the dictionary \
                 file, located at \"{:?}\". Please ensure that the file is present \
                 at such location and make sure that this program has read and write \
                 permissions. Details: {:?}",
-                    config.dictionary_path,
-                    e
+                    config.dictionary_path, e
                 );
                 return;
             }
-            Error::JSONError(e) => {
+            dictionary::Error::JSONError(e) => {
                 eprintln!(
                     "A JSON parsing error occurred. This is most likely due to \
                 a corrupted dictionary file. Please check the dictionary file for any \
@@ -135,24 +108,34 @@ async fn main() {
     let mut tasks: PlatformTasks = vec![];
 
     let telegram = if let Some(telegram_config) = config.telegram {
-        Some(Arc::new(Mutex::new(Telegram::new(
+        let t = match Telegram::new(
             telegram_config,
             seeborg.clone(), /* clones the Arc, not the SeeBorg instance */
-        ))))
+        ) {
+            Ok(o) => o,
+            Err(e) => {
+                eprintln!("Could not start Telegram. Error: {}", e);
+                return;
+            }
+        };
+        Some(Arc::new(Mutex::new(t)))
     } else {
         None
     };
     if let Some(shared_t) = telegram {
         tasks.push(Box::pin(async move {
             let mut telegram = shared_t.lock().await;
-            telegram.poll().await
+            match telegram.run().await {
+                Ok(_) => Ok(()),
+                Err(e) => Err(Box::new(e))
+            }
         }));
     }
 
     futures::future::join_all(tasks).await;
 }
 
-fn save_dictionary(config: &Config, dict: &Dictionary) -> Result<(), Error> {
+fn save_dictionary(config: &Config, dict: &Dictionary) -> Result<(), dictionary::Error> {
     match dict.write_to_disk(Path::new(&config.dictionary_path)) {
         Ok(_) => Ok(()),
         Err(e) => {

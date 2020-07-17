@@ -63,8 +63,8 @@ pub struct Config {
     pub dictionary_path: String,
     pub auto_save_period: i64,
     pub behavior: MainBehavior,
-    pub telegram: Option<Platform>,
-    pub discord: Option<Platform>,
+    pub telegram: Option<TelegramPlatform>,
+    pub discord: Option<DiscordPlatform>,
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -172,11 +172,23 @@ pub struct ChatBehaviorOverrides {
 }
 
 /////////////////////////////////////////////////////////////////////////////
-// Platform Struct
+// Telegram Struct
 /////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Platform {
+pub struct TelegramPlatform {
+    pub token: String,
+    pub behavior: Option<BehaviorOverride>,
+    pub chat_behaviors: Option<Vec<ChatBehaviorOverrides>>,
+    pub webhook_bind_address: String,
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// Discord Struct
+/////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DiscordPlatform {
     pub token: String,
     pub behavior: Option<BehaviorOverride>,
     pub chat_behaviors: Option<Vec<ChatBehaviorOverrides>>,

@@ -13,8 +13,7 @@ serde_yaml = "0.8"
 lazy_static = "1.4.0"
 onig = "6"
 rand = { version = "0.7.3", features = ["small_rng"] }
-telegram-bot = "0.7"
 futures = "0.3.5"
-tokio = { version = "0.2.21", features = ["macros", "time", "fs"] }
+tokio = { version = "0.2.21", features = ["full"] }
 rand_core = "0.5.1"
-snafu = "0.4.1"
+carapax = "0.8.0"
