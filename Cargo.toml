@@ -1,5 +1,5 @@
 [package]
-name = "seeborg-rust"
+name = "borg"
 version = "0.1.0"
 authors = ["michel"]
 edition = "2018"

@@ -78,7 +78,7 @@ type PlatformTasks = Vec<Pin<Box<dyn Future<Output = Result<(), PlatformError>>>
 
 #[tokio::main]
 async fn main() {
-    println!("SeeBorg5 by Michel Faria.");
+    println!("Borg is starting up.");
     println!("Please wait while things are set up.");
 
     let config = match Config::load(Path::new(CONFIG_PATH)) {

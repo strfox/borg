@@ -116,6 +116,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf1de2fe8c75bc145a2f577add951f8134889b4795d47466a54a5c846d691693"
 
 [[package]]
+name = "borg"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "carapax",
+ "futures",
+ "lazy_static",
+ "onig",
+ "rand",
+ "rand_core",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "tokio",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1040,23 +1057,6 @@ checksum = "e3042af939fca8c3453b7af0f1c66e533a15a86169e39de2657310ade8f98d3c"
 dependencies = [
  "ring",
  "untrusted",
-]
-
-[[package]]
-name = "seeborg-rust"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "carapax",
- "futures",
- "lazy_static",
- "onig",
- "rand",
- "rand_core",
- "serde",
- "serde_json",
- "serde_yaml",
- "tokio",
 ]
 
 [[package]]

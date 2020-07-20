@@ -175,16 +175,18 @@ fn message_is_older_than_now(message: &Message) -> bool {
 #[handler]
 async fn handle(context: &Arc<Mutex<Context>>, message: Message) -> HandlerResult {
     let context = context.lock().await;
-    if let Some(text) = message.get_text() {
-        let mut seeborg = context.seeborg.lock().await;
-        seeborg.learn(text.data.as_str());
-        if let Some(response) = seeborg.respond_to(text.data.as_str()) {
-            if let Err(e) = context
-                .api
-                .execute(SendMessage::new(message.get_chat_id(), response))
-                .await
-            {
-                eprintln!("ExecuteError: {}", e);
+    if !message_is_older_than_now(&message) {
+        if let Some(text) = message.get_text() {
+            let mut seeborg = context.seeborg.lock().await;
+            seeborg.learn(text.data.as_str());
+            if let Some(response) = seeborg.respond_to(text.data.as_str()) {
+                if let Err(e) = context
+                    .api
+                    .execute(SendMessage::new(message.get_chat_id(), response))
+                    .await
+                {
+                    eprintln!("ExecuteError: {}", e);
+                }
             }
         }
     }
