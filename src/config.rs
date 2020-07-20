@@ -1,6 +1,7 @@
-use onig::Regex;
-use serde::{de::Visitor, Deserialize, Deserializer, Serialize};
 use std::{error, fmt, fs, io, path::Path};
+
+use onig::Regex;
+use serde::{Deserialize, Serialize};
 
 /////////////////////////////////////////////////////////////////////////////
 // Configuration Error Type
@@ -180,7 +181,6 @@ pub struct TelegramPlatform {
     pub token: String,
     pub behavior: Option<BehaviorOverride>,
     pub chat_behaviors: Option<Vec<ChatBehaviorOverrides>>,
-    pub webhook_bind_address: String,
 }
 
 /////////////////////////////////////////////////////////////////////////////

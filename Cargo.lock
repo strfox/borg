@@ -1046,6 +1046,7 @@ dependencies = [
 name = "seeborg-rust"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "carapax",
  "futures",
  "lazy_static",

@@ -1,8 +1,4 @@
-use crate::{
-    config::{BehaviorOverrideValueResolver},
-    dictionary::Dictionary,
-    rand_core::RngCore,
-};
+use crate::{config::BehaviorOverrideValueResolver, dictionary::Dictionary, rand_core::RngCore};
 use rand::rngs::SmallRng;
 use rand_core::SeedableRng;
 

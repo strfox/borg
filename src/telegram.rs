@@ -1,11 +1,21 @@
+use std::{error, fmt, sync::Arc};
+
+use carapax::types::{Message, Update};
+use carapax::{
+    longpoll::LongPoll, Api, ApiError, Dispatcher, ErrorPolicy, ExecuteError, Handler,
+    HandlerResult, LoggingErrorHandler,
+};
+use futures::lock::Mutex;
+
 use crate::{
     config,
     config::{BehaviorOverride, BehaviorOverrideValueResolver},
     seeborg::SeeBorg,
 };
-use carapax::{handler, types::Command, webhook, Api, ApiError, Dispatcher};
-use futures::lock::Mutex;
-use std::{error, fmt, net::SocketAddr, num::ParseIntError, sync::Arc};
+use carapax::handler;
+use carapax::methods::SendMessage;
+use futures::TryFutureExt;
+use std::borrow::Borrow;
 
 /////////////////////////////////////////////////////////////////////////////
 // RunError
@@ -14,14 +24,14 @@ use std::{error, fmt, net::SocketAddr, num::ParseIntError, sync::Arc};
 #[derive(Debug)]
 pub enum RunError {
     SocketAddressParseError(SocketAddrParseError),
-    WebhookError(WebhookError),
+    LongPollError(LongPollError),
 }
 
 impl fmt::Display for RunError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             RunError::SocketAddressParseError(ref e) => e.fmt(f),
-            RunError::WebhookError(ref e) => e.fmt(f),
+            RunError::LongPollError(ref e) => e.fmt(f),
         }
     }
 }
@@ -30,7 +40,7 @@ impl error::Error for RunError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match *self {
             RunError::SocketAddressParseError(ref e) => Some(e),
-            RunError::WebhookError(ref e) => Some(e),
+            RunError::LongPollError(ref e) => Some(e),
         }
     }
 }
@@ -41,9 +51,9 @@ impl From<SocketAddrParseError> for RunError {
     }
 }
 
-impl From<WebhookError> for RunError {
-    fn from(err: WebhookError) -> RunError {
-        RunError::WebhookError(err)
+impl From<LongPollError> for RunError {
+    fn from(err: LongPollError) -> RunError {
+        RunError::LongPollError(err)
     }
 }
 
@@ -69,84 +79,54 @@ impl error::Error for SocketAddrParseError {
 }
 
 /////////////////////////////////////////////////////////////////////////////
-// Webhook Error
+// LongPoll Error
 /////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct WebhookError {
+pub struct LongPollError {
     message: String,
 }
 
-impl fmt::Display for WebhookError {
+impl fmt::Display for LongPollError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Webhook error: {}", self.message)
+        write!(f, "{}", self.message)
     }
 }
 
-impl error::Error for WebhookError {
+impl error::Error for LongPollError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         None
     }
 }
 
 /////////////////////////////////////////////////////////////////////////////
-// Telegram Struct
+// Context Struct
 /////////////////////////////////////////////////////////////////////////////
 
-pub struct Telegram {
+pub struct Context {
     seeborg: Arc<Mutex<SeeBorg>>,
     platform_config: config::TelegramPlatform,
     api: Api,
 }
 
 /////////////////////////////////////////////////////////////////////////////
-// Telegram Implementations
+// Context Implementations
 /////////////////////////////////////////////////////////////////////////////
 
-impl Telegram {
+impl Context {
     pub fn new(
         platform_config: config::TelegramPlatform,
         seeborg: Arc<Mutex<SeeBorg>>,
-    ) -> Result<Telegram, ApiError> {
+    ) -> Result<Context, ApiError> {
         let token = platform_config.token.clone();
-        Api::new(token).map(|api| Telegram {
+        Api::new(token).map(|api| Context {
             seeborg,
             platform_config,
             api,
         })
     }
 
-    pub async fn run(&mut self) -> Result<(), RunError> {
-        let mut dispatcher = Dispatcher::new(self.api.clone());
-
-        #[handler(command = "/start")]
-        async fn start_command_handler(_context: &Api, _command: Command) {
-            todo!();
-        }
-
-        dispatcher.add_handler(start_command_handler);
-
-        let socket_addr: SocketAddr = match self.platform_config.webhook_bind_address.parse() {
-            Ok(o) => o,
-            Err(e) => {
-                return Err(RunError::SocketAddressParseError(SocketAddrParseError {
-                    bad_string: self.platform_config.webhook_bind_address.to_string(),
-                }))
-            }
-        };
-
-        match webhook::run_server(socket_addr, "/seeborg", dispatcher).await {
-            Ok(_) => Ok(()),
-            Err(e) => Err(RunError::WebhookError(WebhookError {
-                message: e.to_string(),
-            })),
-        }
-    }
-    /*
-    fn behavior_for_chat<'a>(
-        &'a self,
-        chat_id: &ChatId,
-    ) -> Option<BehaviorOverrideValueResolver<'a>> {
+    fn behavior_for_chat(&self, chat_id: &i64) -> Option<BehaviorOverrideValueResolver> {
         self.platform_config
             .behavior
             .as_ref()
@@ -160,7 +140,7 @@ impl Telegram {
             .map(|(b, o)| BehaviorOverrideValueResolver::new(b, o))
     }
 
-    fn override_for_chat(&self, chat_id: &ChatId) -> Option<&BehaviorOverride> {
+    fn override_for_chat(&self, chat_id: &i64) -> Option<&BehaviorOverride> {
         let chat_id: i64 = (*chat_id).into();
         let chat_id = chat_id.to_string();
         self.platform_config
@@ -168,9 +148,45 @@ impl Telegram {
             .as_ref()
             .and_then(|bs| bs.iter().find(|cb| cb.chat_id == chat_id))
             .map(|cb| &cb.behavior)
-    }*/
+    }
 }
-/*
+
+pub async fn run(context: Arc<Mutex<Context>>) -> Result<(), RunError> {
+    let mut dispatcher = Dispatcher::new(context.clone());
+    dispatcher.set_error_handler(LoggingErrorHandler::new(ErrorPolicy::Continue));
+    dispatcher.add_handler(handle);
+
+    let context = context.lock().await.api.clone();
+
+    LongPoll::new(context, dispatcher)
+        .run()
+        .await;
+    Ok(())
+}
+
 fn message_is_older_than_now(message: &Message) -> bool {
     message.date < crate::util::unix_time() as i64
-}*/
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// Update Handler
+/////////////////////////////////////////////////////////////////////////////
+
+#[handler]
+async fn handle(context: &Arc<Mutex<Context>>, message: Message) -> HandlerResult {
+    let context = context.lock().await;
+    if let Some(text) = message.get_text() {
+        let mut seeborg = context.seeborg.lock().await;
+        seeborg.learn(text.data.as_str());
+        if let Some(response) = seeborg.respond_to(text.data.as_str()) {
+            if let Err(e) = context
+                .api
+                .execute(SendMessage::new(message.get_chat_id(), response))
+                .await
+            {
+                eprintln!("ExecuteError: {}", e);
+            }
+        }
+    }
+    HandlerResult::Continue
+}

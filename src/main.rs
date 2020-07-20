@@ -7,6 +7,8 @@ extern crate serde;
 extern crate serde_json;
 extern crate serde_yaml;
 extern crate tokio;
+#[macro_use]
+extern crate async_trait;
 
 #[macro_use]
 mod util;
@@ -26,12 +28,53 @@ use std::fmt;
 use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::error::Error;
-use telegram::Telegram;
+
+/////////////////////////////////////////////////////////////////////////////
+// Platform Error
+/////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub enum PlatformError {
+    TelegramError(telegram::RunError),
+}
+
+impl fmt::Display for PlatformError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            PlatformError::TelegramError(ref e) => e.fmt(f),
+        }
+    }
+}
+
+impl error::Error for PlatformError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        match *self {
+            PlatformError::TelegramError(ref e) => Some(e),
+        }
+    }
+}
+
+impl From<telegram::RunError> for PlatformError {
+    fn from(err: telegram::RunError) -> PlatformError {
+        PlatformError::TelegramError(err)
+    }
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// Constants
+/////////////////////////////////////////////////////////////////////////////
 
 const CONFIG_PATH: &str = "config.yml";
 
-type PlatformTasks = Vec<Pin<Box<dyn Future<Output = Result<(), Box<dyn Error>>>>>>;
+/////////////////////////////////////////////////////////////////////////////
+// Types
+/////////////////////////////////////////////////////////////////////////////
+
+type PlatformTasks = Vec<Pin<Box<dyn Future<Output = Result<(), PlatformError>>>>>;
+
+/////////////////////////////////////////////////////////////////////////////
+// Main Function
+/////////////////////////////////////////////////////////////////////////////
 
 #[tokio::main]
 async fn main() {
@@ -98,41 +141,41 @@ async fn main() {
         dict.rebuild_indices();
         println!("Indices built.");
 
-        match save_dictionary(&config, &dict) {
-            Ok(_) => {}
-            Err(e) => println!("Couldn't save dictionary, error: {:?}", e),
+        if let Err(e) = save_dictionary(&config, &dict) {
+            println!("Couldn't save dictionary, error: {:?}", e)
         }
     }
 
     let seeborg = Arc::new(Mutex::new(SeeBorg::new(dict)));
     let mut tasks: PlatformTasks = vec![];
 
-    let telegram = if let Some(telegram_config) = config.telegram {
-        let t = match Telegram::new(
-            telegram_config,
-            seeborg.clone(), /* clones the Arc, not the SeeBorg instance */
-        ) {
-            Ok(o) => o,
-            Err(e) => {
-                eprintln!("Could not start Telegram. Error: {}", e);
-                return;
-            }
-        };
-        Some(Arc::new(Mutex::new(t)))
-    } else {
-        None
+    let telegram_context = match config.telegram {
+        Some(telegram_config) => Some(Arc::new(Mutex::new(
+            match telegram::Context::new(telegram_config, seeborg.clone()) {
+                Ok(o) => o,
+                Err(e) => {
+                    eprintln!("Could not start Telegram. Error: {}", e);
+                    return;
+                }
+            },
+        ))),
+        None => None,
     };
-    if let Some(shared_t) = telegram {
+
+    if let Some(telegram_context) = telegram_context {
         tasks.push(Box::pin(async move {
-            let mut telegram = shared_t.lock().await;
-            match telegram.run().await {
+            match telegram::run(telegram_context.clone()).await {
+                Err(e) => Err(PlatformError::TelegramError(e)),
                 Ok(_) => Ok(()),
-                Err(e) => Err(Box::new(e))
             }
         }));
     }
 
-    futures::future::join_all(tasks).await;
+    for result in futures::future::join_all(tasks).await {
+        if let Err(e) = result {
+            eprintln!("Task exited with an error: {}", e);
+        }
+    }
 }
 
 fn save_dictionary(config: &Config, dict: &Dictionary) -> Result<(), dictionary::Error> {

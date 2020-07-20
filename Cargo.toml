@@ -17,3 +17,4 @@ futures = "0.3.5"
 tokio = { version = "0.2.21", features = ["full"] }
 rand_core = "0.5.1"
 carapax = "0.8.0"
+async-trait = "0.1.36"
