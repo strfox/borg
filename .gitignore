@@ -7,7 +7,7 @@
 # IDEA
 /.idea
 
-# Seeborg
+# Borg
 /config.yml
 /dictionary.json
 /dictionary.json.bak

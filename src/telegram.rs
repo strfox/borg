@@ -10,7 +10,7 @@ use futures::lock::Mutex;
 use crate::{
     config,
     config::{BehaviorOverride, BehaviorOverrideValueResolver},
-    seeborg::SeeBorg,
+    borg::Borg,
 };
 use carapax::handler;
 use carapax::methods::SendMessage;
@@ -104,7 +104,7 @@ impl error::Error for LongPollError {
 /////////////////////////////////////////////////////////////////////////////
 
 pub struct Context {
-    seeborg: Arc<Mutex<SeeBorg>>,
+    borg: Arc<Mutex<Borg>>,
     platform_config: config::TelegramPlatform,
     api: Api,
 }
@@ -116,11 +116,11 @@ pub struct Context {
 impl Context {
     pub fn new(
         platform_config: config::TelegramPlatform,
-        seeborg: Arc<Mutex<SeeBorg>>,
+        borg: Arc<Mutex<Borg>>,
     ) -> Result<Context, ApiError> {
         let token = platform_config.token.clone();
         Api::new(token).map(|api| Context {
-            seeborg,
+            borg,
             platform_config,
             api,
         })
@@ -163,14 +163,14 @@ async fn handle(context: &Arc<Mutex<Context>>, message: Message) -> HandlerResul
 
             let behavior = context.behavior_for_chat(&message.get_chat_id());
 
-            let mut seeborg = context.seeborg.lock().await;
+            let mut borg = context.borg.lock().await;
 
-            if seeborg.should_learn(&user.id.to_string(), behavior.as_ref()) {
-                seeborg.learn(text.data.as_str());
+            if borg.should_learn(&user.id.to_string(), behavior.as_ref()) {
+                borg.learn(text.data.as_str());
             }
 
-            if seeborg.should_reply_to(&user.id.to_string(), behavior.as_ref()) {
-                if let Some(response) = seeborg.respond_to(text.data.as_str()) {
+            if borg.should_reply_to(&user.id.to_string(), behavior.as_ref()) {
+                if let Some(response) = borg.respond_to(text.data.as_str()) {
                     if let Err(e) = context
                         .api
                         .execute(SendMessage::new(message.get_chat_id(), response))

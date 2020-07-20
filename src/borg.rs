@@ -3,22 +3,22 @@ use rand::rngs::SmallRng;
 use rand_core::SeedableRng;
 
 /////////////////////////////////////////////////////////////////////////////
-// SeeBorg Type
+// Borg Type
 /////////////////////////////////////////////////////////////////////////////
 
-pub struct SeeBorg {
+pub struct Borg {
     dictionary: Dictionary,
     rng: SmallRng,
 }
 
 /////////////////////////////////////////////////////////////////////////////
-// SeeBorg Implementations
+// Borg Implementations
 /////////////////////////////////////////////////////////////////////////////
 
 /// This implementation is platform agnostic.
-impl SeeBorg {
-    pub fn new(dictionary: Dictionary) -> SeeBorg {
-        SeeBorg {
+impl Borg {
+    pub fn new(dictionary: Dictionary) -> Borg {
+        Borg {
             dictionary,
             rng: SmallRng::from_entropy(),
         }

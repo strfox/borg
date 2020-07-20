@@ -15,14 +15,14 @@ mod util;
 mod config;
 mod dictionary;
 mod discord;
-mod seeborg;
+mod borg;
 mod telegram;
 
 use config::{Config, ConfigError};
 use dictionary::Dictionary;
 use futures::lock::Mutex;
 use futures::Future;
-use seeborg::SeeBorg;
+use borg::Borg;
 use std::error;
 use std::fmt;
 use std::path::Path;
@@ -146,12 +146,12 @@ async fn main() {
         }
     }
 
-    let seeborg = Arc::new(Mutex::new(SeeBorg::new(dict)));
+    let borg = Arc::new(Mutex::new(Borg::new(dict)));
     let mut tasks: PlatformTasks = vec![];
 
     let telegram_context = match config.telegram {
         Some(telegram_config) => Some(Arc::new(Mutex::new(
-            match telegram::Context::new(telegram_config, seeborg.clone()) {
+            match telegram::Context::new(telegram_config, borg.clone()) {
                 Ok(o) => o,
                 Err(e) => {
                     eprintln!("Could not start Telegram. Error: {}", e);

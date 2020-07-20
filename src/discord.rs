@@ -1,11 +1,11 @@
-use crate::seeborg::SeeBorg;
+use crate::borg::Borg;
 
 struct Discord<'a> {
-    seeborg: &'a SeeBorg,
+    borg: &'a Borg,
 }
 
 impl Discord<'_> {
-    fn new(seeborg: &SeeBorg) -> Discord {
-        Discord { seeborg }
+    fn new(borg: &Borg) -> Discord {
+        Discord { borg }
     }
 }
