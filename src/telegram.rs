@@ -151,6 +151,52 @@ impl Context {
     }
 }
 
+/////////////////////////////////////////////////////////////////////////////
+// Update Handler
+/////////////////////////////////////////////////////////////////////////////
+
+#[handler]
+async fn handle(context: &Arc<Mutex<Context>>, message: Message) -> HandlerResult {
+    let context = context.lock().await;
+    if !message_is_older_than_now(&message) {
+        if let(Some(text), Some(user)) = (message.get_text(), message.get_user()) {
+
+            let behavior = context.behavior_for_chat(&message.get_chat_id());
+
+            let mut seeborg = context.seeborg.lock().await;
+
+            if seeborg.should_learn(&user.id.to_string(), behavior.as_ref()) {
+                seeborg.learn(text.data.as_str());
+            }
+
+            if seeborg.should_reply_to(&user.id.to_string(), behavior.as_ref()) {
+                if let Some(response) = seeborg.respond_to(text.data.as_str()) {
+                    if let Err(e) = context
+                        .api
+                        .execute(SendMessage::new(message.get_chat_id(), response))
+                        .await
+                    {
+                        eprintln!("ExecuteError: {}", e);
+                    }
+                }
+            }
+        }
+    }
+    HandlerResult::Continue
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// Utility Functions
+/////////////////////////////////////////////////////////////////////////////
+
+fn message_is_older_than_now(message: &Message) -> bool {
+    message.date < crate::util::unix_time() as i64
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// Run Method
+/////////////////////////////////////////////////////////////////////////////
+
 pub async fn run(context: Arc<Mutex<Context>>) -> Result<(), RunError> {
     let mut dispatcher = Dispatcher::new(context.clone());
     dispatcher.set_error_handler(LoggingErrorHandler::new(ErrorPolicy::Continue));
@@ -162,33 +208,4 @@ pub async fn run(context: Arc<Mutex<Context>>) -> Result<(), RunError> {
         .run()
         .await;
     Ok(())
-}
-
-fn message_is_older_than_now(message: &Message) -> bool {
-    message.date < crate::util::unix_time() as i64
-}
-
-/////////////////////////////////////////////////////////////////////////////
-// Update Handler
-/////////////////////////////////////////////////////////////////////////////
-
-#[handler]
-async fn handle(context: &Arc<Mutex<Context>>, message: Message) -> HandlerResult {
-    let context = context.lock().await;
-    if !message_is_older_than_now(&message) {
-        if let Some(text) = message.get_text() {
-            let mut seeborg = context.seeborg.lock().await;
-            seeborg.learn(text.data.as_str());
-            if let Some(response) = seeborg.respond_to(text.data.as_str()) {
-                if let Err(e) = context
-                    .api
-                    .execute(SendMessage::new(message.get_chat_id(), response))
-                    .await
-                {
-                    eprintln!("ExecuteError: {}", e);
-                }
-            }
-        }
-    }
-    HandlerResult::Continue
 }

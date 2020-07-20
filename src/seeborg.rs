@@ -32,12 +32,20 @@ impl SeeBorg {
         self.dictionary.learn(line);
     }
 
+    pub fn should_learn(
+        &mut self,
+        user_id: &str,
+        behavior: Option<&BehaviorOverrideValueResolver>,
+    ) -> bool {
+        true // TODO
+    }
+
     pub fn should_reply_to(
         &mut self,
         user_id: &str,
         behavior: Option<&BehaviorOverrideValueResolver>,
     ) -> bool {
-        todo!()
+        true // TODO
     }
 }
 
