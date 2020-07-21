@@ -1,9 +1,8 @@
 use std::{error, fmt, sync::Arc};
 
-use carapax::types::{Message};
+use carapax::types::Message;
 use carapax::{
-    longpoll::LongPoll, Api, ApiError, Dispatcher, ErrorPolicy,
-    HandlerResult, LoggingErrorHandler,
+    longpoll::LongPoll, Api, ApiError, Dispatcher, ErrorPolicy, HandlerResult, LoggingErrorHandler,
 };
 use futures::lock::Mutex;
 
@@ -15,7 +14,6 @@ use crate::{
 use carapax::handler;
 use carapax::methods::SendMessage;
 use futures::TryFutureExt;
-
 
 /////////////////////////////////////////////////////////////////////////////
 // RunError
@@ -175,7 +173,8 @@ async fn handle(context: &Arc<Mutex<Context>>, message: Message) -> HandlerResul
                     match context
                         .api
                         .execute(SendMessage::new(chat_id, response))
-                        .await {
+                        .await
+                    {
                         Ok(..) => {}
                         Err(e) => {
                             error!("ExecuteError: {}", e);

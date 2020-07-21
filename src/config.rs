@@ -1,8 +1,6 @@
-
 use std::{error, fmt, fs, io, path::Path};
 
 use crate::pattern::{CompilationError, Pattern};
-
 
 use serde::{Deserialize, Serialize};
 

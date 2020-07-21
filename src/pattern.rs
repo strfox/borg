@@ -70,10 +70,7 @@ impl Pattern {
     }
 }
 
-pub(crate) fn matches_any<'a>(
-    input: &str,
-    patterns: &'a Vec<Pattern>,
-) -> Option<&'a Pattern> {
+pub(crate) fn matches_any<'a>(input: &str, patterns: &'a Vec<Pattern>) -> Option<&'a Pattern> {
     for p in patterns {
         match p.get_regex() {
             Ok(regex) => {

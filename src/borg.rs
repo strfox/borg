@@ -5,7 +5,6 @@ use crate::{
 use rand::rngs::SmallRng;
 use rand_core::SeedableRng;
 
-
 /////////////////////////////////////////////////////////////////////////////
 // Borg Type
 /////////////////////////////////////////////////////////////////////////////
@@ -45,27 +44,40 @@ impl Borg {
         behavior: &Option<BehaviorOverrideValueResolver>,
     ) -> bool {
         let b = BehaviorValueResolver::new(&self.behavior, behavior);
-        debug!("[should_learn] Using {:?} for resolving behavior values.", b);
+        debug!(
+            "[should_learn] Using {:?} for resolving behavior values.",
+            b
+        );
 
         match pattern::matches_any(user_id, b.ignored_users()) {
             Some(pattern) => {
-                debug!("[should_learn] User {:?} matches ignore pattern {:?}. Refusing to learn",
-                       user_id, pattern);
+                debug!(
+                    "[should_learn] User {:?} matches ignore pattern {:?}. Refusing to learn",
+                    user_id, pattern
+                );
                 return false;
             }
             None => {
-                debug!("[should_learn] User ID {:?} does not match any blacklisted pattern.", user_id);
+                debug!(
+                    "[should_learn] User ID {:?} does not match any blacklisted pattern.",
+                    user_id
+                );
             }
         }
 
         match pattern::matches_any(input, b.blacklisted_patterns()) {
             Some(pattern) => {
-                debug!("[should_learn] Input {:?} matches blacklisted pattern {:?}. Refusing to learn",
-                       input, pattern);
+                debug!(
+                    "[should_learn] Input {:?} matches blacklisted pattern {:?}. Refusing to learn",
+                    input, pattern
+                );
                 return false;
             }
             None => {
-                debug!("[should_learn] Input {:?} does not match any blacklisted pattern.", input);
+                debug!(
+                    "[should_learn] Input {:?} does not match any blacklisted pattern.",
+                    input
+                );
             }
         }
 
@@ -80,7 +92,10 @@ impl Borg {
         behavior: &Option<BehaviorOverrideValueResolver>,
     ) -> bool {
         let b = BehaviorValueResolver::new(&self.behavior, behavior);
-        debug!("[should_reply_to] Using {:?} for resolving behavior values.", b);
+        debug!(
+            "[should_reply_to] Using {:?} for resolving behavior values.",
+            b
+        );
 
         if let Some(matched) = pattern::matches_any(user_id, b.ignored_users()) {
             debug!(
@@ -96,9 +111,15 @@ impl Borg {
         }
 
         if let Some(matched) = pattern::matches_any(input, b.nick_patterns()) {
-            debug!("[should_reply_to] Input {:?} matched nick pattern {:?}", input, matched);
+            debug!(
+                "[should_reply_to] Input {:?} matched nick pattern {:?}",
+                input, matched
+            );
             let reply_nick = b.reply_nick();
-            debug!("[should_reply_to] Reply to nickname chance: {:?}", reply_nick);
+            debug!(
+                "[should_reply_to] Reply to nickname chance: {:?}",
+                reply_nick
+            );
             if chance(reply_nick, &mut self.rng) {
                 debug!("[should_reply_to] Reply nick decided to reply");
                 return true;
@@ -108,9 +129,15 @@ impl Borg {
         }
 
         if let Some(matched) = pattern::matches_any(input, b.magic_patterns()) {
-            debug!("[should_reply_to] Input {:?} matched magic pattern {:?}", input, matched);
+            debug!(
+                "[should_reply_to] Input {:?} matched magic pattern {:?}",
+                input, matched
+            );
             let reply_magic = b.reply_magic();
-            debug!("[should_reply_to] Reply to magic patterns chance: {:?}", reply_magic);
+            debug!(
+                "[should_reply_to] Reply to magic patterns chance: {:?}",
+                reply_magic
+            );
             if chance(reply_magic, &mut self.rng) {
                 debug!("[should_reply_to] Reply magic decided to reply");
                 return true;
