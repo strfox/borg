@@ -1,3 +1,5 @@
+mod pattern;
+
 #[macro_use]
 extern crate lazy_static;
 extern crate futures;
@@ -9,20 +11,23 @@ extern crate serde_yaml;
 extern crate tokio;
 #[macro_use]
 extern crate async_trait;
+#[macro_use]
+extern crate log;
+extern crate env_logger;
 
 #[macro_use]
 mod util;
+mod borg;
 mod config;
 mod dictionary;
 mod discord;
-mod borg;
 mod telegram;
 
+use borg::Borg;
 use config::{Config, ConfigError};
 use dictionary::Dictionary;
 use futures::lock::Mutex;
 use futures::Future;
-use borg::Borg;
 use std::error;
 use std::fmt;
 use std::path::Path;
@@ -78,14 +83,15 @@ type PlatformTasks = Vec<Pin<Box<dyn Future<Output = Result<(), PlatformError>>>
 
 #[tokio::main]
 async fn main() {
-    println!("Borg is starting up.");
-    println!("Please wait while things are set up.");
+    println!("Borg is here.");
+
+    env_logger::init();
 
     let config = match Config::load(Path::new(CONFIG_PATH)) {
         Ok(c) => c,
         Err(e) => match e {
             ConfigError::IOError(e) => {
-                eprintln!(
+                error!(
                     "An I/O error happened and the program could not \
                     read the configuration file. Please make sure that the \
                     file exists and that the program has permissions to read \
@@ -95,7 +101,7 @@ async fn main() {
                 return;
             }
             ConfigError::YAMLError(e) => {
-                eprintln!(
+                error!(
                     "A YAML parsing error occurred. This is most \
                     likely due to a malformed configuration file. Please check \
                     that your configuration is correct and try again. \
@@ -107,13 +113,13 @@ async fn main() {
         },
     };
 
-    println!("{:?} loaded.", CONFIG_PATH);
+    debug!("Config {:?} loaded.", CONFIG_PATH);
 
     let mut dict = match Dictionary::load(Path::new(&config.dictionary_path)) {
         Ok(d) => d,
         Err(e) => match e {
             dictionary::Error::IOError(e) => {
-                eprintln!(
+                error!(
                     "An I/O error happened while trying to read the dictionary \
                 file, located at \"{:?}\". Please ensure that the file is present \
                 at such location and make sure that this program has read and write \
@@ -123,7 +129,7 @@ async fn main() {
                 return;
             }
             dictionary::Error::JSONError(e) => {
-                eprintln!(
+                error!(
                     "A JSON parsing error occurred. This is most likely due to \
                 a corrupted dictionary file. Please check the dictionary file for any \
                 anomalies. Details on the JSON parsing error: {:?}",
@@ -134,19 +140,19 @@ async fn main() {
         },
     };
 
-    println!("{:?} loaded.", &config.dictionary_path);
+    debug!("Dictionary {:?} loaded.", &config.dictionary_path);
 
     if dict.needs_to_build_indices() {
-        println!("Indices need to be built. Building indices.");
+        warn!("Indices need to be built. Building indices.");
         dict.rebuild_indices();
-        println!("Indices built.");
+        warn!("Indices built.");
 
         if let Err(e) = save_dictionary(&config, &dict) {
-            println!("Couldn't save dictionary, error: {:?}", e)
+            error!("Couldn't save dictionary, error: {:?}", e)
         }
     }
 
-    let borg = Arc::new(Mutex::new(Borg::new(dict)));
+    let borg = Arc::new(Mutex::new(Borg::new(dict, config.behavior)));
     let mut tasks: PlatformTasks = vec![];
 
     let telegram_context = match config.telegram {
@@ -154,7 +160,7 @@ async fn main() {
             match telegram::Context::new(telegram_config, borg.clone()) {
                 Ok(o) => o,
                 Err(e) => {
-                    eprintln!("Could not start Telegram. Error: {}", e);
+                    error!("Could not start Telegram. Error: {}", e);
                     return;
                 }
             },
@@ -173,7 +179,7 @@ async fn main() {
 
     for result in futures::future::join_all(tasks).await {
         if let Err(e) = result {
-            eprintln!("Task exited with an error: {}", e);
+            error!("Task exited with an error: {}", e);
         }
     }
 }
@@ -182,7 +188,7 @@ fn save_dictionary(config: &Config, dict: &Dictionary) -> Result<(), dictionary:
     match dict.write_to_disk(Path::new(&config.dictionary_path)) {
         Ok(_) => Ok(()),
         Err(e) => {
-            eprintln!(
+            error!(
                 "Cannot write to dictionary file. Please ensure that the program \
                 has the necessary permissions to write to the dictionary."
             );

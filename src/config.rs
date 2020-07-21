@@ -1,6 +1,9 @@
+use std::error::Error;
 use std::{error, fmt, fs, io, path::Path};
 
+use crate::pattern::{CompilationError, Pattern};
 use onig::Regex;
+use serde::export::Formatter;
 use serde::{Deserialize, Serialize};
 
 /////////////////////////////////////////////////////////////////////////////
@@ -52,7 +55,7 @@ impl From<serde_yaml::Error> for ConfigError {
 trait PatternOwner {
     /// compile_patterns should compile all Pattern objects in the implementing
     /// struct.
-    fn compile_patterns(&mut self) -> Result<(), PatternError>;
+    fn compile_patterns(&mut self) -> Result<(), CompilationError>;
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -107,14 +110,14 @@ pub struct MainBehavior {
 /////////////////////////////////////////////////////////////////////////////
 
 impl PatternOwner for MainBehavior {
-    fn compile_patterns(&mut self) -> Result<(), PatternError> {
+    fn compile_patterns(&mut self) -> Result<(), CompilationError> {
         for p in self
             .magic_patterns
             .iter_mut()
             .chain(self.blacklisted_patterns.iter_mut())
             .chain(self.nick_patterns.iter_mut())
         {
-            p.regex()?;
+            p.compile()?;
         }
         Ok(())
     }
@@ -142,20 +145,20 @@ pub struct BehaviorOverride {
 /////////////////////////////////////////////////////////////////////////////
 
 impl PatternOwner for BehaviorOverride {
-    fn compile_patterns(&mut self) -> Result<(), PatternError> {
+    fn compile_patterns(&mut self) -> Result<(), CompilationError> {
         if let Some(ref mut ps) = self.magic_patterns {
             for p in ps.iter_mut() {
-                p.regex()?;
+                p.compile()?;
             }
         }
         if let Some(ref mut ps) = self.blacklisted_patterns {
             for p in ps.iter_mut() {
-                p.regex()?;
+                p.compile()?;
             }
         }
         if let Some(ref mut ps) = self.nick_patterns {
             for p in ps.iter_mut() {
-                p.regex()?;
+                p.compile()?;
             }
         }
         Ok(())
@@ -195,82 +198,13 @@ pub struct DiscordPlatform {
 }
 
 /////////////////////////////////////////////////////////////////////////////
-// Pattern Error Type
-/////////////////////////////////////////////////////////////////////////////
-
-#[derive(Debug)]
-pub enum PatternError {
-    CompilationError(onig::Error),
-}
-
-impl fmt::Display for PatternError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            PatternError::CompilationError(ref e) => e.fmt(f),
-        }
-    }
-}
-
-impl error::Error for PatternError {
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        match *self {
-            PatternError::CompilationError(ref e) => Some(e),
-        }
-    }
-}
-
-impl From<onig::Error> for PatternError {
-    fn from(err: onig::Error) -> PatternError {
-        PatternError::CompilationError(err)
-    }
-}
-
-/////////////////////////////////////////////////////////////////////////////
-// Pattern Struct
-/////////////////////////////////////////////////////////////////////////////
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Pattern {
-    #[serde(skip)]
-    compiled: Option<Regex>,
-    pub original: String,
-}
-
-/////////////////////////////////////////////////////////////////////////////
-// Pattern Implementations
-/////////////////////////////////////////////////////////////////////////////
-
-impl Pattern {
-    pub fn regex(&mut self) -> Result<&Regex, PatternError> {
-        match self.compiled {
-            Some(ref p) => Ok(p),
-            None => {
-                self.compiled = Some(Regex::new(&self.original)?);
-                // Since self.compiled was assigned a value in the previous
-                // statement, it is safe to unwrap.
-                Ok(self.compiled.as_ref().unwrap())
-            }
-        }
-    }
-}
-
-fn matches_any(input: &str, patterns: &mut Vec<Pattern>) -> Result<bool, PatternError> {
-    for p in patterns {
-        match p.regex() {
-            Ok(regex) => return Ok(regex.is_match(input)),
-            Err(e) => return Err(e),
-        }
-    }
-    Ok(false)
-}
-
-/////////////////////////////////////////////////////////////////////////////
 // BehaviorValues Struct
 /////////////////////////////////////////////////////////////////////////////
 
+#[derive(Debug)]
 pub struct BehaviorValueResolver<'a> {
     behavior: &'a MainBehavior,
-    override_: Option<BehaviorOverrideValueResolver<'a>>,
+    override_: &'a Option<BehaviorOverrideValueResolver<'a>>,
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -280,7 +214,7 @@ pub struct BehaviorValueResolver<'a> {
 impl<'a> BehaviorValueResolver<'a> {
     pub fn new(
         behavior: &'a MainBehavior,
-        override_: Option<BehaviorOverrideValueResolver<'a>>,
+        override_: &'a Option<BehaviorOverrideValueResolver<'a>>,
     ) -> BehaviorValueResolver<'a> {
         BehaviorValueResolver {
             behavior,
@@ -356,6 +290,7 @@ impl<'a> BehaviorValueResolver<'a> {
 // OverrideResolver Struct
 /////////////////////////////////////////////////////////////////////////////
 
+#[derive(Debug)]
 pub struct BehaviorOverrideValueResolver<'a> {
     behavior: &'a BehaviorOverride,
     override_: Option<Box<BehaviorOverrideValueResolver<'a>>>,
