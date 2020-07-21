@@ -1,9 +1,9 @@
-use std::error::Error;
+
 use std::{error, fmt, fs, io, path::Path};
 
 use crate::pattern::{CompilationError, Pattern};
-use onig::Regex;
-use serde::export::Formatter;
+
+
 use serde::{Deserialize, Serialize};
 
 /////////////////////////////////////////////////////////////////////////////

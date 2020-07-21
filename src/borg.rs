@@ -41,9 +41,24 @@ impl Borg {
     pub fn should_learn(
         &mut self,
         user_id: &str,
+        input: &str,
         behavior: &Option<BehaviorOverrideValueResolver>,
     ) -> bool {
-        true // TODO
+        let b = BehaviorValueResolver::new(&self.behavior, behavior);
+        debug!("Using {:?} for resolving behavior values.", b);
+
+        match pattern::matches_any(input, b.blacklisted_patterns()) {
+            Some(pattern) => {
+                debug!("Input \"{:?}\" matches blacklisted pattern {:?}. Refusing to learn",
+                       input, pattern);
+                return false;
+            }
+            None => {
+                debug!("Input \"{:?}\" does not match any blacklisted pattern.", input);
+            }
+        }
+
+        true
     }
 
     pub fn should_reply_to(
@@ -51,72 +66,56 @@ impl Borg {
         user_id: &str,
         input: &str,
         behavior: &Option<BehaviorOverrideValueResolver>,
-    ) -> Result<bool, NotCompiledError> {
+    ) -> bool {
         let b = BehaviorValueResolver::new(&self.behavior, behavior);
-
         debug!("Using {:?} for resolving behavior values.", b);
 
-        match pattern::matches_any(user_id, b.ignored_users()) {
-            Ok(result) => {
-                if let Some(matched) = result {
-                    debug!(
-                        "User is ignored, user ID {:?} matched pattern {:?}",
-                        user_id, matched
-                    );
-                    return Ok(true);
-                }
-            }
-            Err(e) => return Err(e)
+        if let Some(matched) = pattern::matches_any(user_id, b.ignored_users()) {
+            debug!(
+                "User is ignored, user ID {:?} matched pattern {:?}",
+                user_id, matched
+            );
+            return true;
         }
 
         if !b.is_speaking() {
             debug!("Speaking is off");
-            return Ok(false);
+            return false;
         }
 
-        match pattern::matches_any(input, b.nick_patterns()) {
-            Ok(result) => {
-                if let Some(matched) = result {
-                    debug!("Input \"{:?}\" matched nick pattern {:?}", input, matched);
-                    let reply_nick = b.reply_nick();
-                    debug!("Reply to nickname chance: {:?}", reply_nick);
-                    if chance(reply_nick, &mut self.rng) {
-                        debug!("Reply nick decided to reply");
-                        return Ok(true);
-                    } else {
-                        debug!("Reply nick decided not to reply")
-                    }
-                }
+        if let Some(matched) = pattern::matches_any(input, b.nick_patterns()) {
+            debug!("Input \"{:?}\" matched nick pattern {:?}", input, matched);
+            let reply_nick = b.reply_nick();
+            debug!("Reply to nickname chance: {:?}", reply_nick);
+            if chance(reply_nick, &mut self.rng) {
+                debug!("Reply nick decided to reply");
+                return true;
+            } else {
+                debug!("Reply nick decided not to reply")
             }
-            Err(e) => return Err(e)
         }
 
-        match pattern::matches_any(input, b.magic_patterns()) {
-            Ok(result) => {
-                if let Some(matched) = result {
-                    debug!("Input \"{:?}\" matched magic pattern {:?}", input, matched);
-                    let reply_magic = b.reply_magic();
-                    debug!("Reply to magic patterns chance: {:?}", reply_magic);
-                    if chance(reply_magic, &mut self.rng) {
-                        debug!("Reply magic decided to reply");
-                        return Ok(true);
-                    } else {
-                        debug!("Reply magic decided not to reply");
-                    }
-                }
+        if let Some(matched) = pattern::matches_any(input, b.magic_patterns()) {
+            debug!("Input \"{:?}\" matched magic pattern {:?}", input, matched);
+            let reply_magic = b.reply_magic();
+            debug!("Reply to magic patterns chance: {:?}", reply_magic);
+            if chance(reply_magic, &mut self.rng) {
+                debug!("Reply magic decided to reply");
+                return true;
+            } else {
+                debug!("Reply magic decided not to reply");
             }
-            Err(e) => return Err(e)
         }
 
         let reply_rate = b.reply_rate();
         debug!("Reply rate: {:?}", reply_rate);
-        return Ok(if chance(reply_rate, &mut self.rng) {
+        return if chance(reply_rate, &mut self.rng) {
             debug!("Decided to reply to reply rate");
             true
         } else {
             debug!("Decided not to reply to reply rate");
             false
-        })
+        };
     }
 }
 

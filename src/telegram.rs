@@ -1,8 +1,8 @@
 use std::{error, fmt, sync::Arc};
 
-use carapax::types::{Message, Update};
+use carapax::types::{Message};
 use carapax::{
-    longpoll::LongPoll, Api, ApiError, Dispatcher, ErrorPolicy, ExecuteError, Handler,
+    longpoll::LongPoll, Api, ApiError, Dispatcher, ErrorPolicy,
     HandlerResult, LoggingErrorHandler,
 };
 use futures::lock::Mutex;
@@ -15,7 +15,7 @@ use crate::{
 use carapax::handler;
 use carapax::methods::SendMessage;
 use futures::TryFutureExt;
-use std::borrow::Borrow;
+
 
 /////////////////////////////////////////////////////////////////////////////
 // RunError
@@ -161,28 +161,27 @@ async fn handle(context: &Arc<Mutex<Context>>, message: Message) -> HandlerResul
     if !message_is_older_than_now(&message) {
         if let (Some(text), Some(user)) = (message.get_text(), message.get_user()) {
             let behavior = context.behavior_for_chat(&message.get_chat_id());
-
+            let input = text.data.as_str();
+            let user_id = &user.id.to_string();
+            let chat_id = message.get_chat_id();
             let mut borg = context.borg.lock().await;
 
-            if borg.should_learn(&user.id.to_string(), &behavior) {
-                borg.learn(text.data.as_str());
+            if borg.should_learn(user_id, input, &behavior) {
+                borg.learn(input);
             }
 
-            match borg.should_reply_to(&user.id.to_string(), text.data.as_str(), &behavior) {
-                Ok(result) => {
-                    if result {
-                        if let Some(response) = borg.respond_to(text.data.as_str()) {
-                            if let Err(e) = context
-                                .api
-                                .execute(SendMessage::new(message.get_chat_id(), response))
-                                .await
-                            {
-                                error!("ExecuteError: {}", e);
-                            }
+            if borg.should_reply_to(user_id, input, &behavior) {
+                if let Some(response) = borg.respond_to(input) {
+                    match context
+                        .api
+                        .execute(SendMessage::new(chat_id, response))
+                        .await {
+                        Ok(..) => {}
+                        Err(e) => {
+                            error!("ExecuteError: {}", e);
                         }
                     }
                 }
-                Err(e) => {}
             }
         }
     }

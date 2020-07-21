@@ -73,16 +73,16 @@ impl Pattern {
 pub(crate) fn matches_any<'a>(
     input: &str,
     patterns: &'a Vec<Pattern>,
-) -> Result<Option<&'a Pattern>, NotCompiledError> {
+) -> Option<&'a Pattern> {
     for p in patterns {
         match p.get_regex() {
             Ok(regex) => {
                 if regex.is_match(input) {
-                    return Ok(Some(p));
+                    return Some(p);
                 }
             }
-            Err(e) => return Err(e),
+            Err(e) => panic!("Pattern {:?} is not compiled", p),
         }
     }
-    Ok(None)
+    None
 }
