@@ -81,7 +81,7 @@ pub(crate) fn matches_any<'a>(
                     return Some(p);
                 }
             }
-            Err(e) => panic!("Pattern {:?} is not compiled", p),
+            Err(_e) => panic!("Pattern {:?} is not compiled", p),
         }
     }
     None

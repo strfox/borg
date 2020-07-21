@@ -4,7 +4,7 @@ use crate::{
 };
 use rand::rngs::SmallRng;
 use rand_core::SeedableRng;
-use crate::pattern::NotCompiledError;
+
 
 /////////////////////////////////////////////////////////////////////////////
 // Borg Type
@@ -40,7 +40,7 @@ impl Borg {
 
     pub fn should_learn(
         &mut self,
-        user_id: &str,
+        _user_id: &str,
         input: &str,
         behavior: &Option<BehaviorOverrideValueResolver>,
     ) -> bool {
